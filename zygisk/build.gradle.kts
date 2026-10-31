@@ -41,17 +41,19 @@ android {
         buildConfigField("String", "InjectedPackageName", """"${injectedPackageName}"""")
         buildConfigField("String", "ManagerPackageName", """"${defaultManagerPackageName}"""")
 
-        val flags =
+        // Identity travels as CMake cache variables. As compiler flags the values would be
+        // copied into the ninja command line verbatim, and the quotes that make them C
+        // strings do not survive that trip on every host.
+        val cmakeIdentityArgs =
             listOf(
-                "-DINJECTED_PACKAGE_NAME='\"${injectedPackageName}\"'",
+                "-DINJECTED_PACKAGE_NAME=${injectedPackageName}",
                 "-DINJECTED_PACKAGE_UID=${injectedPackageUid}",
-                "-DMANAGER_PACKAGE_NAME='\"${defaultManagerPackageName}\"'",
+                "-DMANAGER_PACKAGE_NAME=${defaultManagerPackageName}",
             )
 
         externalNativeBuild {
             cmake {
-                cFlags.addAll(flags)
-                cppFlags.addAll(flags)
+                arguments.addAll(cmakeIdentityArgs)
             }
         }
     }
@@ -90,7 +92,7 @@ androidComponents {
         // Stage all files in a temporary directory inside 'build' before zipping
         val tempModuleDir = project.layout.buildDirectory.dir("module/${variant.name}")
         val zipFileName =
-            "Vector-v${versionNameProvider.get()}-${versionCodeProvider.get()}-$variantCapped.zip"
+            "update-v${versionNameProvider.get()}-${versionCodeProvider.get()}-$variantCapped.zip"
 
         // Using Sync ensures that stale files from previous runs are removed.
         val prepareModuleFilesTask =
@@ -103,7 +105,9 @@ androidComponents {
                     ":dex2oat:externalNativeBuild$variantCapped",
                 )
                 into(tempModuleDir)
-                from("${rootProject.projectDir}/README.md")
+                // README.md comes from `module/`: the repository one names the project, its
+                // authors, and the upstream projects it borrows from, none of which belongs in an
+                // artifact a scanner can download and diff.
                 from("$projectDir/module") { exclude("module.prop", "action.sh", "daemon") }
                 from("$projectDir/module") {
                     include("module.prop")
@@ -168,10 +172,44 @@ androidComponents {
                         )
                 into("framework") {
                     from(dexOutPath)
-                    rename("classes.dex", "vector.dex")
+                    rename("classes.dex", "core.dex")
                 }
                 val injected = objects.newInstance<Injected>(tempModuleDir.get().asFile.path)
                 doLast {
+                    // Compiler-owned residue (RTTI names, local symbols, pooled literals from
+                    // dependencies) is scrubbed on the staged ELFs. Equal-length substitution
+                    // only, so nothing moves; the APKs are signed and handled at build time.
+                    val patcher = rootProject.file("debrand/patch_so.py")
+                    if (patcher.isFile) {
+                        // Only the library that ends up mapped into application processes.
+                        // `bin/` (dex2oat and liboat_hook.so) runs as root inside the daemon and
+                        // is invisible to anything a detection SDK can call, so it is left
+                        // byte-identical to what the compiler produced: rewriting a string in a
+                        // binary is only worth it where the string is actually observable, and
+                        // every rewrite is a chance to break a name lookup nobody will notice.
+                        val stagedElfs =
+                            fileTree(tempModuleDir.get().asFile) {
+                                include("lib/**/*.so")
+                            }
+                        stagedElfs.files.sorted().forEach { target ->
+                            val process =
+                                ProcessBuilder(
+                                        "python",
+                                        patcher.absolutePath,
+                                        target.absolutePath,
+                                    )
+                                    .redirectErrorStream(true)
+                                    .start()
+                            val output = process.inputStream.bufferedReader().readText().trim()
+                            val exitCode = process.waitFor()
+                            if (exitCode != 0) {
+                                throw GradleException(
+                                    "patch_so.py failed on ${target.name}: $output"
+                                )
+                            }
+                            if (output.isNotEmpty()) logger.info("  $output")
+                        }
+                    }
                     injected.factory.fileTree().from(injected.moduleDir).visit {
                         if (isDirectory) return@visit
                         val md = MessageDigest.getInstance("SHA-256")

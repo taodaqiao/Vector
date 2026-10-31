@@ -15,6 +15,16 @@ add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+# Everything the Java side looks up is a JNI export, and JNIEXPORT already pins those to default
+# visibility.  Hiding the rest keeps C++ mangled names -- which spell out the project's namespace
+# and class names -- out of the dynamic symbol table of a library that ships inside the APK.
+target_compile_options(${PROJECT_NAME} PRIVATE -fvisibility=hidden -fvisibility-inlines-hidden -fno-ident)
+target_link_options(${PROJECT_NAME} PRIVATE -Wl,--exclude-libs,ALL)
+
+# Randomised per build by build.gradle.kts; see the comment there. Quoted here so the macro
+# reaches the compiler as a string literal rather than a bare token.
+target_compile_definitions(${PROJECT_NAME} PRIVATE DEV_SOCK_NAME="${DEV_SOCK_NAME}")
+
 target_link_libraries(${PROJECT_NAME} PRIVATE lsplant_static dex_builder_static android log)
 
 if (DEFINED DEBUG_SYMBOLS_PATH)

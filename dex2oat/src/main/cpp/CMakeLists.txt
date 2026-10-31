@@ -9,6 +9,10 @@ add_subdirectory(${VECTOR_ROOT}/external/lsplt/lsplt/src/main/jni external)
 
 target_include_directories(oat_hook PUBLIC include)
 target_include_directories(dex2oat PUBLIC include)
+
+# Randomised per build by build.gradle.kts, so the socket name in this binary is not a constant a
+# scanner can match against the daemon or the module zip.
+target_compile_definitions(dex2oat PRIVATE DEV_SOCK_NAME="${DEV_SOCK_NAME}")
 target_link_libraries(dex2oat log)
 target_link_libraries(oat_hook log lsplt_static)
 

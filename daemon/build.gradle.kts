@@ -12,6 +12,7 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 
 val defaultManagerPackageName = rootProject.extra["defaultManagerPackageName"] as String
+val devSockName = rootProject.extra["devSockName"] as String
 val injectedPackageName = rootProject.extra["injectedPackageName"] as String
 val injectedPackageUid = rootProject.extra["injectedPackageUid"] as Int
 @Suppress("UNCHECKED_CAST")
@@ -49,7 +50,14 @@ android {
   }
 
   buildTypes {
-    all { externalNativeBuild { cmake { arguments += "-DANDROID_ALLOW_UNDEFINED_SYMBOLS=true" } } }
+    all {
+      externalNativeBuild {
+        cmake {
+          arguments += "-DANDROID_ALLOW_UNDEFINED_SYMBOLS=true"
+          arguments += "-DDEV_SOCK_NAME=$devSockName"
+        }
+      }
+    }
     release {
       isMinifyEnabled = true
       proguardFiles("proguard-rules.pro")

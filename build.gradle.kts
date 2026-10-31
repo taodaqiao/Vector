@@ -220,7 +220,30 @@ val versionNameProvider = providers.of(GitLatestTagValueSource::class.java) {}
 
 val injectedPackageName = "com.android.shell"
 val injectedPackageUid = 2000
-val defaultManagerPackageName = "org.matrix.vector.manager"
+val defaultManagerPackageName = "com.sysutil.compat.core"
+
+// Name of the abstract unix socket the daemon and the dex2oat shim meet on.
+//
+// This used to be a 32-character constant in both binaries, rewritten to a random value by the
+// installer. That constant was a perfect cross-artifact signature: it matched the module zip, the
+// deployed binaries, and the socket a live process had open. Randomising it per build removes the
+// constant from both the sources and the installer.
+//
+// The value is generated once and remembered in the build directory: a fresh UUID on every
+// configured invocation would drift apart as soon as Gradle rebuilt only one of the two sides,
+// and a mismatched pair means the dex2oat shim can never reach the daemon again.
+val devSockName = run {
+    val cache = rootProject.layout.buildDirectory.file("debrand/devSockName.txt").get().asFile
+    val remembered = runCatching { cache.readText().trim() }.getOrNull()
+    if (!remembered.isNullOrEmpty()) {
+        remembered
+    } else {
+        val generated = java.util.UUID.randomUUID().toString().replace("-", "")
+        cache.parentFile?.mkdirs()
+        cache.writeText(generated)
+        generated
+    }
+}
 
 val androidTargetSdkVersion = 37
 val androidMinSdkVersion = 27
@@ -241,6 +264,8 @@ extra.set("injectedPackageName", injectedPackageName)
 extra.set("injectedPackageUid", injectedPackageUid)
 
 extra.set("defaultManagerPackageName", defaultManagerPackageName)
+
+extra.set("devSockName", devSockName)
 
 extra.set("androidTargetSdkVersion", androidTargetSdkVersion)
 
@@ -282,8 +307,6 @@ subprojects {
 
                 val flags =
                     listOf(
-                        "-DVERSION_CODE=${versionCodeProvider.get()}",
-                        "-DVERSION_NAME='\"${versionNameProvider.get()}\"'",
                         // parallel_hashmap reaches for <emmintrin.h> whenever __SSE2__ is defined,
                         // and that header's static inline intrinsics arrive twice on the x86 ABIs:
                         // dex_builder.ixx and dex_helper.ixx each include phmap in their global
@@ -303,6 +326,14 @@ subprojects {
                     listOf(
                         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
                         "-DVECTOR_ROOT=${rootDir.absolutePath}",
+                        // Version macros travel as CMake cache variables, never as compile
+                        // flags. A flag would be copied into the ninja command line verbatim,
+                        // and the quotes that make the value a C string cannot survive that
+                        // trip on every host: CMake turns them into a multi-character
+                        // literal. As a cache variable CMake itself adds the escaped quotes
+                        // through target_compile_definitions in native/CMakeLists.txt.
+                        "-DVERSION_CODE=${versionCodeProvider.get()}",
+                        "-DVERSION_NAME=${versionNameProvider.get()}",
                         // Enforce 16 KB page size alignment for Android 15+ compatibility
                         "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384",
                         "-DCMAKE_EXE_LINKER_FLAGS=-Wl,-z,max-page-size=16384",
