@@ -28,6 +28,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Properties
+import org.matrix.vector.daemon.Identity
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -74,7 +75,7 @@ val ModuleLoad.apkOrNull: ModuleCode?
   get() = (this as? ModuleLoad.Loaded)?.apk
 
 object FileSystem {
-  val basePath: Path = Paths.get("/data/adb/sysupd")
+  val basePath: Path = Paths.get(Identity.DATA_DIR)
   val logDirPath: Path = basePath.resolve("log")
   val oldLogDirPath: Path = basePath.resolve("log.old")
   val modulePath: Path = basePath.resolve("modules")
@@ -101,7 +102,7 @@ object FileSystem {
    * the marker at runtime needs a daemon restart to take effect.
    */
   val memberRenameEnabled: Boolean
-    get() = Files.exists(basePath.resolve("rename_members"))
+    get() = Files.exists(basePath.resolve(Identity.MEMBER_RENAME_MARKER))
 
   private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(ZoneId.systemDefault())
   private val lockPath: Path = basePath.resolve("lock")
@@ -484,7 +485,7 @@ object FileSystem {
   fun getPreloadDex(obfuscate: Boolean): SharedMemory? {
     if (preloadDex == null) {
       runCatching {
-            FileInputStream("framework/core.dex").use { preloadDex = readDex(it, obfuscate) }
+            FileInputStream(Identity.FRAMEWORK_DEX).use { preloadDex = readDex(it, obfuscate) }
           }
           .onFailure { Log.e(TAG, "Failed to load framework dex", it) }
     }

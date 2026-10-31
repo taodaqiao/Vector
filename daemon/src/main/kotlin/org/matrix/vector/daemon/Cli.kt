@@ -188,7 +188,7 @@ object OutputFormatter {
 
 // --- CLI Commands (picocli) ---
 @Command(
-    name = "ctl",
+    name = Identity.CLI_NAME,
     mixinStandardHelpOptions = true,
     version = ["ctl ${BuildConfig.VERSION_NAME}"],
     description = ["A scriptable CLI for the framework daemon."],
