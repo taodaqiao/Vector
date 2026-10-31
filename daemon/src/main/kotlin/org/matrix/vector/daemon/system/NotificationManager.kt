@@ -20,13 +20,14 @@ import android.util.Log
 import io.github.libxposed.service.IXposedScopeCallback
 import java.util.UUID
 import org.matrix.vector.daemon.BuildConfig
+import org.matrix.vector.daemon.Identity
 import org.matrix.vector.daemon.R
 import org.matrix.vector.daemon.data.FileSystem
 import org.matrix.vector.daemon.utils.FakeContext
 
 private const val TAG = "SysNotificationManager"
-private const val STATUS_CHANNEL_ID = "sys_status"
-private const val UPDATED_CHANNEL_ID = "sys_module_updated"
+private const val STATUS_CHANNEL_ID = Identity.CHANNEL_STATUS
+private const val UPDATED_CHANNEL_ID = Identity.CHANNEL_UPDATED
 private const val STATUS_NOTIF_ID = BuildConfig.MANAGER_INJECTED_UID
 
 /**
@@ -60,7 +61,7 @@ object NotificationManager {
   val openManagerAction = UUID.randomUUID().toString()
   val moduleScopeAction = UUID.randomUUID().toString()
 
-  val SCOPE_CHANNEL_ID = "sys_module_scope"
+  val SCOPE_CHANNEL_ID = Identity.CHANNEL_SCOPE
 
   private val nm: android.app.INotificationManager? by
       SystemService(
@@ -111,22 +112,21 @@ object NotificationManager {
 
   private fun createChannels() {
     retireOldChannels()
-    val context = FakeContext()
     val list =
         listOf(
             NotificationChannel(
                     STATUS_CHANNEL_ID,
-                    context.getString(R.string.status_channel_name),
+                    Identity.CHANNEL_STATUS_NAME,
                     android.app.NotificationManager.IMPORTANCE_MIN)
                 .apply { setShowBadge(false) },
             NotificationChannel(
                     UPDATED_CHANNEL_ID,
-                    context.getString(R.string.module_updated_channel_name),
+                    Identity.CHANNEL_UPDATED_NAME,
                     android.app.NotificationManager.IMPORTANCE_HIGH)
                 .apply { setShowBadge(false) },
             NotificationChannel(
                     SCOPE_CHANNEL_ID,
-                    context.getString(R.string.scope_channel_name),
+                    Identity.CHANNEL_SCOPE_NAME,
                     android.app.NotificationManager.IMPORTANCE_HIGH)
                 .apply { setShowBadge(false) })
     runCatching {
@@ -167,8 +167,8 @@ object NotificationManager {
 
     val notif =
         Notification.Builder(context, STATUS_CHANNEL_ID)
-            .setContentTitle(context.getString(R.string.vector_running_notification_title))
-            .setContentText(context.getString(R.string.vector_running_notification_content))
+            .setContentTitle(Identity.NOTIFICATION_TITLE)
+            .setContentText(Identity.NOTIFICATION_CONTENT)
             .setSmallIcon(getNotificationIcon())
             .setContentIntent(pi)
             .setVisibility(Notification.VISIBILITY_SECRET)

@@ -47,7 +47,7 @@ object VectorService : IVectorDaemon.Stub() {
       else "android.provider.Telephony.SECRET_CODE"
 
   /** Dial *#*#873283#*#* to open the manager. */
-  private const val SECRET_CODE = "873283"
+  private const val SECRET_CODE = Identity.DIAL_CODE
 
   override fun dispatchSystemServerContext(
       appThread: IBinder?,

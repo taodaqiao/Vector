@@ -1300,3 +1300,64 @@ obfuscation: 53 descriptor(s) rewritten, 13 member name(s) rewritten, 52 known n
 
 最近一次实测：legacy 探针在一个设置进程里对 6 个包触发了回调，`original` 读到 `反馈工具箱` / `相册` / `DevCheck`，替换后 `now=probe-ok`；现代探针在 `com.android.settings` 与 `:background` 两个进程各拿到 `loader=true factory=true`；两次都 `Fatal signal 11 = 0`、`NoSuchMethodError` / `Failed to find method` 零命中。
 用法与复位命令见 `testres/README.md`（含 `probe.jks` 的生成命令——签名密钥不入库，`.gitignore` 已排除 `*.jks`/`*.apk`）。
+
+## 19. 身份集中：`daemon/.../Identity.kt`
+
+第 1 到第 13 节把「能被别人看见的名字」一个个改掉了，但改法是就地替换，结果是同一种东西散在八处。这一节收的是**维护成本**，不是新的检测面。
+
+### 19.1 为什么值得收
+
+上游近 12 个月动过 105 个 `res/values*/strings.xml`，最活跃的 `manager/src/main/res/values-pl/strings.xml` 有 16 次提交。我们为了把两条通知文案改中性，删掉了 42 个 `values-*/strings.xml` 里的同名 key —— 每删一处，都是一次与上游改同一文件的机会。这类冲突不会报错，只会在某次合并后让译文回退成旧词。
+
+### 19.2 收进去的常量
+
+| 常量 | 值 | 原来散在 |
+|---|---|---|
+| `DATA_DIR` | `/data/adb/sysupd` | `data/FileSystem.kt:77` |
+| `MEMBER_RENAME_MARKER` / `NO_SANITIZER_MARKER` | `rename_members` / `no_sanitizer` | `FileSystem.kt:104`、`native/src/core/sanitizer.cpp`（native 侧继续用 sealed 字符串拼） |
+| `FRAMEWORK_DEX` | `framework/core.dex` | `FileSystem.kt:487` |
+| `CLI_NAME` | `ctl` | `Cli.kt:191`（picocli `@Command(name = ...)`，接受 `const val`） |
+| `DIAL_CODE` | `873283` | `VectorService.kt:50` |
+| `CHANNEL_STATUS` / `CHANNEL_UPDATED` / `CHANNEL_SCOPE` | `sys_status` / `sys_module_updated` / `sys_module_scope` | `system/NotificationManager.kt:28,29,64` |
+| `CHANNEL_*_NAME` | `System service` / `Module update complete` / `Scope request` | 三个 `R.string.*_channel_name` |
+| `NOTIFICATION_TITLE` / `NOTIFICATION_CONTENT` | `Service running` / `Tap the notification to open manager` | `R.string.vector_running_notification_*` |
+
+### 19.3 资源文件全部还原
+
+`daemon/src/main/res/values*/strings.xml` 43 个文件（42 个本地化 + 默认）回到上游原样，代价是 daemon 侧的通知文案不再本地化。
+
+值得说清这个取舍：那两条串只出现在一个常驻通知里，看的人是拿着手机的人，不是任何 app；而为了保住 42 种译法，就得永远背着 42 个文件的删除改动。换成英文常量之后，`daemon/src/main/res` 与上游的差异**只剩 `drawable/ic_statue_monochrome.xml`**（图标换掉的那一处）。
+
+一个必须记住的边界：还原后 `values/strings.xml` 里又有 `Vector status` 字样，但它**没有任何代码读**。`daemon.apk` 只随模块 zip 发布、位于 `/data/adb/modules/perf_patch/`，root 之外读不到；运行时下发到系统的是 `Identity` 里的中性串。
+
+### 19.4 效果
+
+| 指标 | 收敛前 | 收敛后 |
+|---|---|---|
+| 与上游差异文件数 | 171 | 129 |
+| `daemon/src/main/res` 差异 | 44 个文件 | 1 个文件（图标） |
+| 需要改名的位置 | 8 个文件 13 处 | 1 个文件 13 行 |
+
+### 19.5 验证
+
+`.\gradlew.bat :daemon:assembleRelease` → `BUILD SUCCESSFUL in 1m 17s`；`:zygisk:zipAll` 后装机重启，`dumpsys notification --noredact` 里 `mId='sys_status' mName=System service`、`android.title=String (Service running)`，`cli status` 正常读回 `Enabled Modules`，三轮冲压 `Fatal signal 11 = 0`。
+
+### 19.6 故意没做的
+
+log tag（`SysNative`、`SysZygiskBridge` 等，60+ 文件）与线程名仍是字面量。它们的可见性限于 `logcat` 与 `/proc/<pid>/task/*/comm`，普通 app 两者都读不到别家进程；收它要动 60 个文件，换来的检测面为零。如果将来要把它们也收进 `Identity`，做法与本节相同，不建议现在做。
+### 19.7 顺带发现的另一处泄漏：git tag 进了 `module.prop`
+
+收敛过程中给这个提交打了个 tag 叫 `debrand-1.0`，重建后 `module.prop` 变成：
+
+```
+version=vdebrand-1.0 (3123-2bece972)
+```
+
+版本串来自 `build.gradle.kts:44` 的 `GitLatestTagValueSource`（`git tag --list --sort=-v:refname` 取第一行），所以**tag 名会原样进入模块描述文件、zip 文件名（`update-vdebrand-1.0-3123-Release.zip`）和 `ctl status` 的第一行**。改 tag 名是最省事的修法：
+
+```bash
+git tag -d debrand-1.0
+git tag 3.1.0            # 任意不泄露意图的版本号
+```
+
+重建后 `version=v3.1.0 (3123-2bece972+main)`、`update-v3.1.0-3123-Release.zip`。这条记在这里是因为它属于同一类错误：给内部东西起描述性名字，然后这个名字自己跑到外面去了。
