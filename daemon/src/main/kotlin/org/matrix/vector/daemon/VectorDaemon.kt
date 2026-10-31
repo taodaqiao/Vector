@@ -64,7 +64,7 @@ object VectorDaemon {
    * place a restart changes its mind about the rendezvous is the place the name is read from.
    */
   val proxyServiceName: String
-    get() = if (startedAfterSystemServer) "cmdex_alt" else "cmdex"
+    get() = if (startedAfterSystemServer) BuildConfig.BRIDGE_SERVICE_ALT else BuildConfig.BRIDGE_SERVICE
 
   /**
    * The `activity` binder this daemon last linked its death recipient through.

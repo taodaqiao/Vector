@@ -34,7 +34,7 @@ object BridgeService {
 
     /** Cleans up service references if the remote Vector daemon crashes. */
     private val serviceRecipient: DeathRecipient = DeathRecipient {
-        Log.e(TAG, "Vector daemin service died.")
+        Log.e(TAG, "The daemon binder died.")
         serviceBinder?.unlinkToDeath(this.serviceRecipient, 0)
         serviceBinder = null
         service = null
@@ -80,7 +80,7 @@ object BridgeService {
             }
             .onFailure { Log.e(TAG, "Failed to dispatch system context", it) }
 
-        Log.i(TAG, "Vector daemin service binder linked.")
+        Log.i(TAG, "The daemon binder is linked.")
     }
 
     /** Handles manual parcel transactions. Called via reflection/JNI from the native hook. */

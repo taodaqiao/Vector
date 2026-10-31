@@ -432,7 +432,9 @@ void LoaderModule::postServerSpecialize(const zygisk::ServerSpecializeArgs *args
                           ipc_bridge.IsSystemServerRunning(env_);
     // The real `serial` service is registered by then, and a lookup returning it would be
     // indistinguishable from a successful rendezvous.
-    std::string bridgeServiceName = is_late_inject ? "cmdex_alt" : "cmdex";
+    // Generated per build: `service list` is readable by any app, and a constant here used to be a
+    // one-line verdict. The daemon publishes the same pair, from the same generated file.
+    std::string bridgeServiceName = is_late_inject ? BRIDGE_SERVICE_ALT_NAME : BRIDGE_SERVICE_NAME;
     auto system_binder = ipc_bridge.RequestSystemServerBinder(env_, bridgeServiceName);
     if (!system_binder) {
         LOGE("Failed to get system server IPC binder. Aborting injection.");

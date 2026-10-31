@@ -1361,3 +1361,107 @@ git tag 3.1.0            # 任意不泄露意图的版本号
 ```
 
 重建后 `version=v3.1.0 (3123-2bece972+main)`、`update-v3.1.0-3123-Release.zip`。这条记在这里是因为它属于同一类错误：给内部东西起描述性名字，然后这个名字自己跑到外面去了。
+## 20. 应用进程内还能读到的那三个名字（2026-11）
+
+§19 把 daemon 侧的名字收进了一个文件，但有三样东西仍然从**被注入进程的内存里**能读到。它们不经过文件系统、不经过 procfs，所以前面的所有过滤层都不管它们。
+
+### 20.1 `getFrameworkName()` 曾经返回仓库名
+
+`xposed/build.gradle.kts` 里原本是：
+
+```kotlin
+val frameworkName = runCatching { gradle.parent?.rootProject?.name }.getOrNull() ?: rootProject.name
+```
+
+这个值经 `VectorContext.getFrameworkName()`（`:78`）、`XposedService.java:160`、`XposedInterface.java:422`、`XposedInterfaceWrapper.java:95` 交给模块，最后作为 `BuildConfig.FRAMEWORK_NAME` **字符串常量躺在 `framework/core.dex` 里**，而这个 dex 是被 `InMemoryDexClassLoader` 加载进目标进程的。改名后的仓库叫什么，目标进程的堆里就叫什么。
+
+改成常量 `"framework"`。影响面：模块调 `getFrameworkName()` 得到的字符串变了，没有别的语义（loader 不靠它判分支，要看版本有 `VERSION_NAME`）。`daemon/build.gradle.kts:37` 的 `FRAMEWORK_NAME` 同样是 `"${rootProject.name}"`，一并改成 `"framework"`。
+
+### 20.2 binder 服务名改成构建期随机
+
+`service list` 对普通应用只显示自己的服务，但这是一个**任何进程都能调的系统命令面**，而当时的名字是写死的 `cmdex` / `cmdex_alt`（两处：`daemon/.../VectorDaemon.kt:67`、`zygisk/src/main/cpp/module.cpp:435`）。一个固定词出现在 `service list` 里，等于免费给检测方一个判据。
+
+沿用 `devSockName` 的做法（§19.2 里那条持久化缓存的写法）：
+
+```kotlin
+val bridgeServiceNames = run {
+    val cache = rootProject.layout.buildDirectory.file("debrand/bridgeServiceNames.txt").get().asFile
+    val remembered = runCatching { cache.readText().lines().filter { it.isNotBlank() } }.getOrNull()
+    if (!remembered.isNullOrEmpty() && remembered.size >= 2) remembered
+    else List(2) { java.util.UUID.randomUUID().toString().replace("-", "") }
+        .also { cache.parentFile?.mkdirs(); cache.writeText(it.joinToString("\n")) }
+}
+extra.set("bridgeServiceName", bridgeServiceNames[0])
+extra.set("bridgeServiceAltName", bridgeServiceNames[1])
+```
+
+两个名字都要缓存：`daemon` 与 `zygisk` 各读一份，只要其中一侧重新配置而另一侧没有，两边就会等在不同的名字上，握手会**永久**失败（这正是 `devSockName` 当初踩过的坑）。
+
+传递路径：`daemon/build.gradle.kts` → `buildConfigField(..., "BRIDGE_SERVICE", ...)`；`zygisk/build.gradle.kts` → `cmakeIdentityArgs` → `zygisk/src/main/cpp/CMakeLists.txt` 的 `target_compile_definitions(BRIDGE_SERVICE_NAME=...)`。注意这里走的是 **CMake 缓存变量**而不是编译 flag —— 字符串宏经 `cFlags` 传递会在部分宿主上丢掉引号（§6 里那条教训）。
+
+真机：
+
+```
+service list | grep -Ei 'cmdex|vector|lspd'
+342	serial: [android.hardware.ISerialManager]        ← 只剩 AOSP 自己的
+service list | grep -E '1da7967d|195bf7b0'
+0	1da7967d4d8044838e429090da15752b: []             ← 新名已注册
+```
+
+### 20.3 日志与异常里的词
+
+`framework/core.dex` 里原本有 13 处 `Vector`，除了 20.1 那一个常量，其余都是**给人看的字**——日志、异常消息：
+
+| 位置 | 原文 | 现在 |
+|---|---|---|
+| `zygisk/.../core/Main.kt` | `Loading Vector/Xposed for ` | `Loading the framework for ` |
+| `zygisk/.../service/BridgeService.kt:37/83` | `Vector daemin service died.` / `... binder linked.` | `The daemon binder died.` / `The daemon binder is linked.` |
+| `zygisk/.../ParasiticManagerHooker.kt:519` | `Vector manager injected successfully into process.` | `The manager was injected into this process.` |
+| `zygisk/.../ParasiticManagerSystemHooker.kt:154/186` | `Suppressing Android 12+ Splash Screen for Vector Manager.` | `Suppressing the Android 12+ splash screen for the manager.` |
+| `xposed/.../di/VectorBootstrap.kt:59` | `check(...) { "VectorBootstrap is already initialized!" }` | `"Bootstrap is already initialized!"` |
+| `legacy/.../XposedBridge.java:190/192/196`、`xposed/.../hooks/VectorNativeHooker.kt:49/57/65/77` | `belongs to Vector itself`, `Vector calls it`, `Vector's dispatch`, `Vector reflects through it` | `the framework` 系列 |
+| `services/daemon-service/.../Utils.java:22` | `LOG_TAG = "Vector"` | `LOG_TAG = "Sys"` |
+
+`LOG_TAG` 那一行还有个副作用值得记：daemon 的日志读取器按 `kPrefixTags` 只把 `Sys` / `dex2oat` / `zygisk` 开头的 tag 收进 verbose 流。早先的批量改名把 `kPrefixTags` 从 `Vector` 改成了 `Sys`，但这个裸 `"Vector"` 常量漏在外面 —— 于是它打的每一条日志都被**静默丢弃**了。改这一行同时修好了那个丢失。
+
+异常消息那条尤其值得看一眼：`check(delegate == null)` 的失败消息是**在目标进程里抛出的**，`getMessage()` 能读到。它不需要谁真的触发，只要有一次双初始化就会把字符串送进对方手里。
+
+### 20.4 现在的读数
+
+```
+framework/core.dex   Vector=1   （仅 org.matrix.vector.ipc.IVectorDaemon 的类名大小写）
+                     cmdex=0
+```
+
+`Vector=1` 与 `lowercase vector=14` 里剩下的都是**故意留的**：
+
+| 残留 | 为什么不动 |
+|---|---|
+| `org.matrix.vector.ipc.IVectorDaemon` | AIDL 描述符。改名要同时改 daemon 侧的 `*.aidl` 与 manager 侧的 stub，并接受两侧版本必须同步升级；`BuildConfig` 之外没有任何代码按它做判断，收益对不起风险 |
+| `org.matrix.vector.manager.Constants` | manager 包名前缀字面量，`ParasiticManagerHooker` 用它拼类名去 `loadClass`。manager 的包名与源码命名空间故意不同（§8.1），这个前缀是唯一能把两者接起来的东西 |
+| 类描述符（`Lorg/matrix/vector/impl/...`） | 加载时由 `obfuscateDexBuffer` 改名（§12），磁盘上的这份是**未改写的原件**，只有 root 能读 |
+
+判据和 §16.7 一样：**磁盘上的 dex 与进程里的 dex 不是同一份东西**。磁盘那份留着真名不影响应用侧，进程里那份才是检测方摸得到的。
+
+### 20.5 验证
+
+```bash
+# 1. 服务名
+service list | grep -Ei 'cmdex|vector|lspd'        # 期望只剩 AOSP 的 serial
+service list | grep -E "$(head -2 build/debrand/bridgeServiceNames.txt | tr '\n' '|' | sed 's/|$//')"
+
+# 2. 常量面
+./gradlew :zygisk:zipAll
+python - <<'PY'
+import zipfile, re
+z = zipfile.ZipFile('zygisk/release/update-v3.1.0-3126-Release.zip')
+d = z.read('framework/core.dex')
+print('Vector =', len(re.findall(rb'Vector', d)), ' cmdex =', len(re.findall(rb'cmdex', d)))
+PY
+
+# 3. 装机后
+sh /data/adb/modules/perf_patch/cli status          # Framework Version / Enabled Modules
+logcat -b crash -d | grep -c Fatal                  # 0
+```
+
+真机结果：`Vector=1 / cmdex=0`、`service list` 只剩 `serial`、新名已注册、`cli status` = `3.1.0 / 3126 / API 102 / Enabled Modules 3`、`Fatal signal 11 = 0`、`sanitizer: installed (15 tokens, full)`。

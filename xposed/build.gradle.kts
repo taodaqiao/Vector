@@ -10,8 +10,12 @@ val versionNameProvider = rootProject.extra["versionNameProvider"] as Provider<S
  * the framework a module answers to is that build's, so its name is the one reported. The version
  * already resolves that way, being read from the repository the build was invoked in.
  */
-val frameworkName: String =
-    runCatching { gradle.parent?.rootProject?.name }.getOrNull() ?: rootProject.name
+// Reported to modules through `XposedInterface.getFrameworkName()`, which means it is a string
+// living in the framework dex and readable from any process the framework is injected into. It used
+// to be the Gradle project name, so a renamed checkout leaked its new name straight into the app
+// process. A neutral constant, on purpose: nothing in the loader keys off this value, and modules
+// that want to know the flavour read VERSION_NAME instead.
+val frameworkName: String = "framework"
 
 plugins {
     alias(libs.plugins.agp.lib)

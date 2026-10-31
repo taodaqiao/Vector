@@ -12,6 +12,8 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 
 val defaultManagerPackageName = rootProject.extra["defaultManagerPackageName"] as String
+val bridgeServiceAltName = rootProject.extra["bridgeServiceAltName"] as String
+val bridgeServiceName = rootProject.extra["bridgeServiceName"] as String
 val devSockName = rootProject.extra["devSockName"] as String
 val injectedPackageName = rootProject.extra["injectedPackageName"] as String
 val injectedPackageUid = rootProject.extra["injectedPackageUid"] as Int
@@ -34,7 +36,7 @@ android {
         "DEFAULT_MANAGER_PACKAGE_NAME",
         """"$defaultManagerPackageName"""",
     )
-    buildConfigField("String", "FRAMEWORK_NAME", """"${rootProject.name}"""")
+    buildConfigField("String", "FRAMEWORK_NAME", """"framework"""")
     buildConfigField("String", "MANAGER_INJECTED_PKG_NAME", """"$injectedPackageName"""")
     buildConfigField("int", "MANAGER_INJECTED_UID", """$injectedPackageUid""")
     buildConfigField("String", "VERSION_NAME", """"${versionNameProvider.get()}"""")
@@ -42,6 +44,9 @@ android {
     // The version code is the commit count on origin/master, so it is identical for a branch
     // build and a master build. The hash is what tells a bug report which one it came from.
     buildConfigField("String", "VERSION_HASH", """"${versionHashProvider.get()}"""")
+    // Published into the binder service registry, where every app can list it by name.
+    buildConfigField("String", "BRIDGE_SERVICE", """"$bridgeServiceName"""")
+    buildConfigField("String", "BRIDGE_SERVICE_ALT", """"$bridgeServiceAltName"""")
 
     val cliToken = UUID.randomUUID()
     // Inject the MSB and LSB as Long constants

@@ -245,6 +245,25 @@ val devSockName = run {
     }
 }
 
+// Names of the binder service this build publishes, and the one the zygisk module looks up.
+//
+// `service list` is readable by any app, so a constant here is a one-line verdict for a detector.
+// It was the last piece of the old naming a third party could simply query. Two names because the
+// daemon publishes under a different one depending on whether it started before or after
+// system_server; they are generated together and remembered together, so they cannot drift apart
+// the way two independently randomised names eventually would.
+val bridgeServiceNames = run {
+    val cache = rootProject.layout.buildDirectory.file("debrand/bridgeServiceNames.txt").get().asFile
+    val remembered = runCatching { cache.readText().lines().filter { it.isNotBlank() } }.getOrNull()
+    if (remembered != null && remembered.size == 2) {
+        remembered
+    } else {
+        val generated = List(2) { java.util.UUID.randomUUID().toString().replace("-", "") }
+        cache.parentFile?.mkdirs()
+        cache.writeText(generated.joinToString("\n"))
+        generated
+    }
+}
 val androidTargetSdkVersion = 37
 val androidMinSdkVersion = 27
 val androidBuildToolsVersion = "37.0.0"
@@ -266,6 +285,8 @@ extra.set("injectedPackageUid", injectedPackageUid)
 extra.set("defaultManagerPackageName", defaultManagerPackageName)
 
 extra.set("devSockName", devSockName)
+extra.set("bridgeServiceName", bridgeServiceNames[0])
+extra.set("bridgeServiceAltName", bridgeServiceNames[1])
 
 extra.set("androidTargetSdkVersion", androidTargetSdkVersion)
 

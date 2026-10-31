@@ -516,7 +516,7 @@ object ParasiticManagerHooker {
                         },
                     )
                 }
-                Utils.logD("Vector manager injected successfully into process.")
+                Utils.logD("The manager was injected into this process.")
                 true
             }
         } catch (e: Throwable) {

@@ -31,6 +31,8 @@ val versionHashProvider = rootProject.extra["versionHashProvider"] as Provider<S
 val injectedPackageName = rootProject.extra["injectedPackageName"] as String
 val injectedPackageUid = rootProject.extra["injectedPackageUid"] as Int
 val defaultManagerPackageName = rootProject.extra["defaultManagerPackageName"] as String
+val bridgeServiceAltName = rootProject.extra["bridgeServiceAltName"] as String
+val bridgeServiceName = rootProject.extra["bridgeServiceName"] as String
 
 android {
     namespace = "org.matrix.vector"
@@ -49,6 +51,8 @@ android {
                 "-DINJECTED_PACKAGE_NAME=${injectedPackageName}",
                 "-DINJECTED_PACKAGE_UID=${injectedPackageUid}",
                 "-DMANAGER_PACKAGE_NAME=${defaultManagerPackageName}",
+                "-DBRIDGE_SERVICE_NAME=${bridgeServiceName}",
+                "-DBRIDGE_SERVICE_ALT_NAME=${bridgeServiceAltName}",
             )
 
         externalNativeBuild {

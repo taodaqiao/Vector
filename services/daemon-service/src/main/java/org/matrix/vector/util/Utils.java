@@ -14,12 +14,12 @@ public class Utils {
     /**
      * The tag every one of these helpers logs under, and it is not arbitrary.
      *
-     * <p>The daemon's log reader routes any tag beginning {@code Vector} into its verbose stream —
+     * <p>The daemon's log reader routes any tag beginning {@code Sys} into its verbose stream —
      * see {@code kPrefixTags} in {@code daemon/src/main/jni/logcat.cpp} — so what is logged here
      * reaches the manager's Verbose tab and travels in an exported bug report. A tag invented here
      * that does not start with it is captured only if it is added to that reader's lists first.</p>
      */
-    public static final String LOG_TAG = "Vector";
+    public static final String LOG_TAG = "Sys";
 
     /** Whether this is a MIUI/HyperOS build, which needs its own deopt workaround. */
     public static final boolean isMIUI =

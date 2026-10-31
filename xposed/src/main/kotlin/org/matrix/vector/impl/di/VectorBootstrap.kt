@@ -56,7 +56,7 @@ object VectorBootstrap {
         private set
 
     fun init(frameworkDelegate: LegacyFrameworkDelegate) {
-        check(delegate == null) { "VectorBootstrap is already initialized!" }
+        check(delegate == null) { "Bootstrap is already initialized!" }
         delegate = frameworkDelegate
     }
 

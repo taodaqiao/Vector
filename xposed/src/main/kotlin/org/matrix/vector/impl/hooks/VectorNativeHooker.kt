@@ -46,7 +46,7 @@ class VectorHookBuilder(
             )
         } else if (origin.declaringClass.classLoader == VectorHookBuilder::class.java.classLoader) {
             throw IllegalArgumentException(
-                "$origin belongs to Vector itself. Hooking the framework would hook the code running your hook."
+                "$origin belongs to the framework itself. Hooking it would hook the code running your hook."
             )
         } else if (
             origin is Method &&
@@ -54,7 +54,7 @@ class VectorHookBuilder(
                 origin.name == "invoke"
         ) {
             throw IllegalArgumentException(
-                "Method.invoke cannot be hooked: Vector calls it to run the original of every hooked method, so a hook here would call itself forever."
+                "Method.invoke cannot be hooked: the framework calls it to run the original of every hooked method, so a hook here would call itself forever."
             )
         } else if (
             origin is Method &&
@@ -62,7 +62,7 @@ class VectorHookBuilder(
                 origin.name == "newInstance"
         ) {
             throw IllegalArgumentException(
-                "Constructor.newInstance cannot be hooked: Vector reflects through it the same way it does Method.invoke, so a hook here would recurse."
+                "Constructor.newInstance cannot be hooked: the framework reflects through it the same way it does Method.invoke, so a hook here would recurse."
             )
         } else if (
             origin is Method &&
@@ -74,7 +74,7 @@ class VectorHookBuilder(
             // hooked method. See #798. If you meant a getClass override on another class, hook that
             // class; Class.getMethods() lists the inherited one, which is not what you want.
             throw IllegalArgumentException(
-                "Object.getClass cannot be hooked: Vector's dispatch calls it entering every hooked method, so a hook here would call itself forever."
+                "Object.getClass cannot be hooked: the framework's dispatch calls it entering every hooked method, so a hook here would call itself forever."
             )
         }
 
