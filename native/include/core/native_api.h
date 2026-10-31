@@ -89,7 +89,7 @@ struct NativeAPIEntries {
 
 // NOTE: Module developers should not include the following INTERNAL definitions.
 
-namespace vector::native {
+namespace sys::rt {
 
 // The entry point function that native modules must export (`native_init`).
 using NativeInit = NativeOnModuleLoaded (*)(const NativeAPIEntries *entries);
@@ -118,7 +118,7 @@ inline int HookInline(void *original, void *replace, void **backup) {
     if constexpr (kIsDebugBuild) {
         Dl_info info;
         if (dladdr(original, &info)) {
-            LOGD("Dobby hooking {} ({}) from {} ({})",
+            LOGD("hooking {} ({}) from {} ({})",
                  info.dli_sname ? info.dli_sname : "(unknown symbol)",
                  info.dli_saddr ? info.dli_saddr : original,
                  info.dli_fname ? info.dli_fname : "(unknown file)", info.dli_fbase);
@@ -135,7 +135,7 @@ inline int UnhookInline(void *original) {
     if constexpr (kIsDebugBuild) {
         Dl_info info;
         if (dladdr(original, &info)) {
-            LOGD("Dobby unhooking {} ({}) from {} ({})",
+            LOGD("unhooking {} ({}) from {} ({})",
                  info.dli_sname ? info.dli_sname : "(unknown symbol)",
                  info.dli_saddr ? info.dli_saddr : original,
                  info.dli_fname ? info.dli_fname : "(unknown file)", info.dli_fbase);
@@ -144,4 +144,4 @@ inline int UnhookInline(void *original) {
     return DobbyDestroy(original);
 }
 
-}  // namespace vector::native
+}  // namespace sys::rt

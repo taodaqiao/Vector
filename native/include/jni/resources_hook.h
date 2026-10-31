@@ -2,11 +2,11 @@
 
 #include <jni.h>
 
-namespace vector::native::jni {
+namespace sys::rt::jni {
 
 /**
- * Builds an InMemoryDexClassLoader that defines xposed.dummy.XResourcesSuperClass (extending
- * res_super) and xposed.dummy.XTypedArraySuperClass (extending ta_super), delegating to parent.
+ * Builds an InMemoryDexClassLoader that defines rt.dummy.XResourcesSuperClass (extending
+ * res_super) and rt.dummy.XTypedArraySuperClass (extending ta_super), delegating to parent.
  * Returns a new local reference, or nullptr on failure.
  *
  * Exposed so an injector that constructs the framework class loader itself can install this loader
@@ -18,4 +18,4 @@ namespace vector::native::jni {
 jobject BuildDummySuperClassLoader(JNIEnv *env, jobject parent, const char *res_super,
                                    const char *ta_super);
 
-}  // namespace vector::native::jni
+}  // namespace sys::rt::jni

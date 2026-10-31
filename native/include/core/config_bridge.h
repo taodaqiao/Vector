@@ -1,48 +1,49 @@
 #pragma once
 
-#include <map>
 #include <memory>
 #include <string>
+
+#include "core/name_table.h"
 
 /**
  * @file config_bridge.h
  * @brief A native-side cache for configuration data, currently only the obfuscation map.
  */
 
-namespace vector::native {
+namespace sys::rt {
 
 /**
- * @class ConfigBridge
+ * @class SettingsSource
  * @brief A singleton that holds configuration data.
  */
-class ConfigBridge {
+class SettingsSource {
 public:
-    virtual ~ConfigBridge() = default;
+    virtual ~SettingsSource() = default;
 
-    ConfigBridge(const ConfigBridge &) = delete;
-    ConfigBridge &operator=(const ConfigBridge &) = delete;
+    SettingsSource(const SettingsSource &) = delete;
+    SettingsSource &operator=(const SettingsSource &) = delete;
 
     /**
-     * @brief Gets the singleton instance of the ConfigBridge.
+     * @brief Gets the singleton instance of the SettingsSource.
      */
-    static ConfigBridge *GetInstance() { return instance_.get(); }
+    static SettingsSource *GetInstance() { return instance_.get(); }
 
     /**
      * @brief Releases ownership of the singleton instance.
      */
-    static std::unique_ptr<ConfigBridge> ReleaseInstance() { return std::move(instance_); }
+    static std::unique_ptr<SettingsSource> ReleaseInstance() { return std::move(instance_); }
 
     /// Gets a reference to the obfuscation map.
-    virtual std::map<std::string, std::string> &obfuscation_map() = 0;
+    virtual NameTable &obfuscation_map() = 0;
 
     /// Sets the obfuscation map.
-    virtual void obfuscation_map(std::map<std::string, std::string> map) = 0;
+    virtual void obfuscation_map(NameTable map) = 0;
 
 protected:
-    ConfigBridge() = default;
+    SettingsSource() = default;
 
     /// The singleton instance, managed alongside the main Context.
-    static std::unique_ptr<ConfigBridge> instance_;
+    static std::unique_ptr<SettingsSource> instance_;
 };
 
-}  // namespace vector::native
+}  // namespace sys::rt

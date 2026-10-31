@@ -3,11 +3,11 @@
 #include "core/config_bridge.h"
 #include "jni/jni_hooks.h"
 
-namespace vector::native {
+namespace sys::rt {
 
-// Instantiate the singleton pointers for Context and ConfigBridge.
+// Instantiate the singleton pointers for Context and SettingsSource.
 std::unique_ptr<Context> Context::instance_;
-std::unique_ptr<ConfigBridge> ConfigBridge::instance_;
+std::unique_ptr<SettingsSource> SettingsSource::instance_;
 
 Context *Context::GetInstance() { return instance_.get(); }
 
@@ -35,7 +35,7 @@ Context::PreloadedDex::~PreloadedDex() {
 
 void Context::InitArtHooker(JNIEnv *env, const lsplant::InitInfo &initInfo) {
     if (!lsplant::Init(env, initInfo)) {
-        LOGE("Failed to initialize LSPlant hooking framework.");
+        LOGE("Failed to initialize the inline hooking framework.");
     }
 }
 
@@ -136,4 +136,4 @@ lsplant::ScopedLocalRef<jclass> Context::FindClassFromLoader(JNIEnv *env, jobjec
     return {env, nullptr};
 }
 
-}  // namespace vector::native
+}  // namespace sys::rt

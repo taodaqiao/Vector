@@ -1,8 +1,11 @@
 #pragma once
 
+#include <deque>
+#include <mutex>
 #include <string>
 
 #include "common/logging.h"
+#include "common/obscure.h"
 #include "core/config_bridge.h"
 #include "core/context.h"
 
@@ -12,7 +15,7 @@
  *
  */
 
-namespace vector::native::jni {
+namespace sys::rt::jni {
 
 /**
  * @brief Returns the number of elements in a statically-allocated C-style array.
@@ -40,17 +43,53 @@ template <typename T, size_t N>
  * @return The JNI signature prefix (e.g., "org/matrix/vector/nativebridge/").
  */
 inline std::string GetNativeBridgeSignature() {
-    auto *bridge = ConfigBridge::GetInstance();
+    auto *bridge = SettingsSource::GetInstance();
     if (bridge) {
-        const auto &obfs_map = bridge->obfuscation_map();
-        // The key must match what the Java build script places in the map.
-        auto it = obfs_map.find("org.matrix.vector.nativebridge.");
-        if (it != obfs_map.end()) {
-            return it->second;
+        // The key must match what the daemon places in the map.  Sealed so that the package
+        // name is not readable from the artifact's read-only data, and hashed inside the table
+        // so it is not resident as text either.
+        if (const std::string *mapped = bridge->obfuscation_map().Find(SEALED(kNativeBridgeKey))) {
+            return *mapped;
         }
     }
     // Fallback or default value if not found.
-    return "org/matrix/vector/nativebridge/";
+    return SEALED(kNativeBridgeSignature);
+}
+
+/**
+ * @brief Resolves a member name (method or field) through the obfuscation map.
+ *
+ * The daemon renames the framework's own member names the same way it renames class names: it
+ * rewrites the dex string holding the name before the dex is loaded, which renames the definition
+ * and every call site in a single step, because a dex string pool is a set of unique strings and a
+ * method id points into it by index. Nothing on the Java side needs a second lookup.
+ *
+ * Native code is the exception: a `GetMethodID(hooker, "callback", ...)` or a JNINativeMethod table
+ * carries the text itself, so it has to ask the map for the same word. The map is the only place
+ * where the two agree; when the map is absent (renaming disabled, or a build without obfuscation)
+ * the input is returned unchanged.
+ *
+ * The returned pointer is interned for the life of the process, so it may be stored in a
+ * JNINativeMethod entry that outlives this call.
+ *
+ * @param name The unobfuscated member name, as written in source.
+ * @return The name to use at runtime.
+ */
+inline const char *ResolveMemberName(const char *name) {
+    auto *bridge = SettingsSource::GetInstance();
+    if (!bridge) return name;
+
+    const std::string *mapped = bridge->obfuscation_map().Find(name);
+    if (!mapped) return name;
+
+    // Interned rather than returned as mapped->c_str(): the table is rebuilt when a new map arrives,
+    // and a dangling pointer inside gMethods[] would be worse than a leaked string.
+    static std::mutex intern_mutex;
+    static std::deque<std::string> interned;
+
+    std::lock_guard<std::mutex> guard(intern_mutex);
+    interned.emplace_back(*mapped);
+    return interned.back().c_str();
 }
 
 /**
@@ -121,4 +160,4 @@ inline bool RegisterNativeMethodsInternal(JNIEnv *env, std::string_view class_na
     RegisterNativeMethodsInternal(env, GetNativeBridgeSignature() + #class_name, gMethods,         \
                                   ArraySize(gMethods))
 
-}  // namespace vector::native::jni
+}  // namespace sys::rt::jni

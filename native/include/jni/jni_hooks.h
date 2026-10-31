@@ -7,7 +7,7 @@
  * @brief Declares the registration functions for all JNI bridge modules.
  */
 
-namespace vector::native::jni {
+namespace sys::rt::jni {
 
 /// Registers the JNI methods for the HookBridge.
 void RegisterHookBridge(JNIEnv *env);
@@ -18,4 +18,4 @@ void RegisterNativeApiBridge(JNIEnv *env);
 /// Registers the JNI methods for the ResourcesHook bridge.
 void RegisterResourcesHook(JNIEnv *env);
 
-}  // namespace vector::native::jni
+}  // namespace sys::rt::jni

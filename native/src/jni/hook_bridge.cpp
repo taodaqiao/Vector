@@ -10,6 +10,7 @@
 #include <shared_mutex>
 #include <vector>
 
+#include "common/obscure.h"
 #include "core/config_bridge.h"
 #include "elf/elf_image.h"
 #include "elf/symbol_cache.h"
@@ -301,7 +302,7 @@ void StoreWidened(JNIEnv *env, const PrimitiveWrapper &from, char to, jobject va
 
 }  // namespace
 
-namespace vector::native::jni {
+namespace sys::rt::jni {
 /**
  * @brief JNI method to install a hook on a given method or constructor.
  * @param useModernApi Distinguishes between the legacy and modern callback
@@ -352,8 +353,13 @@ VECTOR_DEF_NATIVE_METHOD(jboolean, HookBridge, hookMethod, jboolean useModernApi
     // we need to perform the actual native hook using lsplant.
     if (newHook) {
         auto init = env->GetMethodID(hooker, "<init>", "(Ljava/lang/reflect/Executable;)V");
+        // The name is looked up, not written here: when member renaming is on, the dex that defines
+        // this class carries a generated name and this lookup is the only place that still spells
+        // the original.
         auto callback_method = env->ToReflectedMethod(
-            hooker, env->GetMethodID(hooker, "callback", "([Ljava/lang/Object;)Ljava/lang/Object;"),
+            hooker,
+            env->GetMethodID(hooker, ResolveMemberName("callback"),
+                             "([Ljava/lang/Object;)Ljava/lang/Object;"),
             false);
         auto hooker_object = env->NewObject(hooker, init, hookMethod);
         // Use lsplant to replace the target method with our trampoline.
@@ -940,25 +946,23 @@ VECTOR_DEF_NATIVE_METHOD(jobjectArray, HookBridge, callbackSnapshot, jclass call
  */
 VECTOR_DEF_NATIVE_METHOD(jobjectArray, HookBridge, legacyApiPrefixes) {
     // In the dotted form the obfuscation map is served in - the same form loadClass receives.
-    static constexpr const char *kLegacyKeys[] = {
-        "de.robv.android.xposed.",
-    };
-
-    const auto count = static_cast<jsize>(ArraySize(kLegacyKeys));
+    // Sealed: the prefix is the one word a scanner looks for, so it is not stored in the clear.
+    const auto count = 1;
     auto string_class = env->FindClass("java/lang/String");
     if (!string_class) return nullptr;
     auto result = env->NewObjectArray(count, string_class, nullptr);
     env->DeleteLocalRef(string_class);
     if (!result) return nullptr;
 
-    auto *bridge = ConfigBridge::GetInstance();
+    auto *bridge = SettingsSource::GetInstance();
+    const std::string legacy_key = SEALED(kLegacyXposedPrefix);
     for (jsize i = 0; i < count; ++i) {
-        std::string name = kLegacyKeys[i];
+        std::string name = legacy_key;
         if (bridge) {
             const auto &map = bridge->obfuscation_map();
             // Absent means the map never arrived; the unobfuscated name is then the right answer,
             // because a build with no map is a build with no obfuscation.
-            if (auto it = map.find(name); it != map.end()) name = it->second;
+            if (const std::string *mapped = map.Find(name)) name = *mapped;
         }
         auto value = env->NewStringUTF(name.c_str());
         env->SetObjectArrayElement(result, i, value);
@@ -1111,6 +1115,13 @@ void RegisterHookBridge(JNIEnv *env) {
                               "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;");
     env->DeleteLocalRef(method);
 
+    // Rename the entries before they are handed to RegisterNatives: a JNINativeMethod carries the
+    // method name as text, so it cannot follow the dex rewrite on its own. ResolveMemberName returns
+    // the input unchanged when the map has no entry, which is what happens with renaming disabled.
+    for (auto &entry : gMethods) {
+        entry.name = const_cast<char *>(ResolveMemberName(entry.name));
+    }
+
     REGISTER_VECTOR_NATIVE_METHODS(HookBridge);
 }
-}  // namespace vector::native::jni
+}  // namespace sys::rt::jni

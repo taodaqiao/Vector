@@ -18,10 +18,10 @@
  * It serves as the central hub for native operations.
  */
 
-namespace vector::native {
+namespace sys::rt {
 
 // Forward declaration from another module.
-class ConfigBridge;
+class SettingsSource;
 
 /**
  * @class Context
@@ -228,4 +228,4 @@ protected:
     jclass entry_class_ = nullptr;
 };
 
-}  // namespace vector::native
+}  // namespace sys::rt

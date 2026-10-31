@@ -79,7 +79,7 @@ using lsplant::operator""_sym;
  * ===========================================================================================
  */
 
-namespace vector::native {
+namespace sys::rt {
 
 namespace {
 // Mutex to protect access to the global module lists.
@@ -203,4 +203,4 @@ inline static auto do_dlopen_hook =
 
 bool InstallNativeAPI(const lsplant::HookHandler &handler) { return handler(do_dlopen_hook); }
 
-}  // namespace vector::native
+}  // namespace sys::rt

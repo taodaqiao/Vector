@@ -8,6 +8,7 @@
 #include <string>
 
 #include "common/config.h"
+#include "common/obscure.h"
 #include "elf/elf_image.h"
 #include "elf/symbol_cache.h"
 #include "framework/android_types.h"
@@ -15,7 +16,7 @@
 #include "jni/jni_hooks.h"
 #include "jni/resources_hook.h"
 
-namespace vector::native::jni {
+namespace sys::rt::jni {
 
 // --- Type Aliases for Native Android Framework Functions ---
 
@@ -50,20 +51,20 @@ static std::string GetXResourcesClassName() {
     // Use a static local variable to ensure this lookup and string manipulation
     // only happens once.
     static std::string name = []() {
-        auto &obfs_map = ConfigBridge::GetInstance()->obfuscation_map();
-        if (obfs_map.empty()) {
-            LOGW("GetXResourcesClassName: obfuscation_map is empty.");
+        auto &obfs_map = SettingsSource::GetInstance()->obfuscation_map();
+        // The key is the original, unobfuscated class name prefix; the value is the new one.
+        // Both the key and the fallback are sealed: this string is looked up in the same table
+        // the rest of the framework uses, and a plain literal here would be the one readable
+        // copy of the package name inside this library.
+        if (const std::string *mapped = obfs_map.Find(SEALED(kXResKey))) {
+            std::string jni_name = *mapped + "ources";
+            LOGD("Resolved the resources class name to: {}", jni_name.c_str());
+            return jni_name;
         }
-        // The key is the original, unobfuscated class name prefix.
-        // The value is the new, obfuscated prefix.
-        auto it = obfs_map.find("android.content.res.XRes");
-        if (it == obfs_map.end()) {
-            LOGE("Could not find obfuscated name for XResources.");
-            return std::string();
-        }
-        std::string jni_name = it->second + "ources";
-        LOGD("Resolved XResources class name to: {}", jni_name.c_str());
-        return jni_name;
+        // Debug builds hand out key == value, so a miss here only happens when the daemon sent
+        // nothing; the unobfuscated name is still correct in that case.
+        LOGW("The obfuscation map has no entry for the resources class; assuming the default.");
+        return SEALED(kXResClassName);
     }();
     return name;
 }
@@ -147,8 +148,11 @@ VECTOR_DEF_NATIVE_METHOD(jboolean, ResourcesHook, initXResourcesNative) {
     // Wrapped, like the lookup below: a missing method throws NoSuchMethodError, and the raw form
     // returned JNI_FALSE to Java with that exception still pending, so the caller saw a throw where
     // it had asked for a boolean.
+    // The names come from the map for the same reason as every other member lookup: XResources lives
+    // in the dex that carries the generated member names, and this is the only place that still
+    // spells the originals. Both calls return the input when renaming is disabled.
     methodXResourcesTranslateResId = lsplant::JNI_GetStaticMethodID(
-        env, classXResources, "translateResId",
+        env, classXResources, ResolveMemberName("translateResId"),
         fmt::format("(I{}Landroid/content/res/Resources;)I", x_resources_jni_name));
     if (!methodXResourcesTranslateResId) {
         LOGE("Failed to find method: XResources.translateResId");
@@ -156,7 +160,7 @@ VECTOR_DEF_NATIVE_METHOD(jboolean, ResourcesHook, initXResourcesNative) {
     }
 
     methodXResourcesTranslateAttrId = lsplant::JNI_GetStaticMethodID(
-        env, classXResources, "translateAttrId",
+        env, classXResources, ResolveMemberName("translateAttrId"),
         fmt::format("(Ljava/lang/String;{})I", x_resources_jni_name));
     if (!methodXResourcesTranslateAttrId) {
         LOGE("Failed to find method: XResources.translateAttrId");
@@ -204,13 +208,21 @@ jobject BuildDummySuperClassLoader(JNIEnv *env, jobject parent, const char *res_
 
     DexBuilder dex_file;
 
-    // Create a class named "xposed.dummy.XResourcesSuperClass".
-    ClassBuilder xresource_builder{dex_file.MakeClass("xposed/dummy/XResourcesSuperClass")};
+    // These two names are load-bearing and must not be renamed: the framework's own XResources and
+    // XTypedArray classes are compiled against the stubs in hiddenapi/stubs
+    // (rt.dummy.XResourcesSuperClass / rt.dummy.XTypedArraySuperClass), so their superclass
+    // reference in the dex is that exact string. Generating the classes under any other name makes
+    // XResources fail with NoClassDefFoundError the moment a module touches the resources API.
+    static const std::string kResourcesSuperName = SEALED(kResourcesSuperClass);
+    static const std::string kTypedArraySuperName = SEALED(kTypedArraySuperClass);
+
+    // Create the class the caller's XResources instance is derived from.
+    ClassBuilder xresource_builder{dex_file.MakeClass(kResourcesSuperName)};
     // Set its superclass to the one specified by the caller.
     xresource_builder.setSuperClass(TypeDescriptor::FromClassname(res_super));
 
-    // Create a class named "xposed.dummy.XTypedArraySuperClass".
-    ClassBuilder xtypearray_builder{dex_file.MakeClass("xposed/dummy/XTypedArraySuperClass")};
+    // Create the class the caller's XTypedArray instance is derived from.
+    ClassBuilder xtypearray_builder{dex_file.MakeClass(kTypedArraySuperName)};
     // Set its superclass.
     xtypearray_builder.setSuperClass(TypeDescriptor::FromClassname(ta_super));
 
@@ -487,4 +499,4 @@ static JNINativeMethod gMethods[] = {
                          "(JLjava/lang/Object;Landroid/content/res/Resources;)V")};
 
 void RegisterResourcesHook(JNIEnv *env) { REGISTER_VECTOR_NATIVE_METHODS(ResourcesHook); }
-}  // namespace vector::native::jni
+}  // namespace sys::rt::jni

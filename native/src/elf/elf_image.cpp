@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <core/sanitizer.h>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -14,7 +15,7 @@
 
 #include "common/logging.h"
 
-namespace vector::native {
+namespace sys::rt {
 
 namespace {
 // Helper to safely cast an offset from a base pointer.
@@ -401,6 +402,10 @@ bool ElfImage::findModuleBase() {
         std::string pathname;
     };
 
+    // The redaction layer removes module lines from this file for everyone else.  This reader is
+    // the exception: it is asked about system libraries and is the fallback of last resort for the
+    // linker itself, so it must see the file as the kernel wrote it.
+    sanitizer::ScopedBypass bypass;
     FILE *maps = fopen("/proc/self/maps", "r");
     if (!maps) {
         PLOGE("Failed to open /proc/self/maps");
@@ -535,4 +540,4 @@ bool ElfImage::findModuleBase() {
     return true;
 }
 
-}  // namespace vector::native
+}  // namespace sys::rt

@@ -13,7 +13,7 @@
 
 /// The tag used for all log messages from this library.
 #ifndef LOG_TAG
-#define LOG_TAG "VectorNative"
+#define LOG_TAG "SysNative"
 #endif
 
 /**
@@ -64,7 +64,7 @@
 #define PLOGE(...) ((void)0)
 #else
 
-namespace vector::native::detail {
+namespace sys::rt::detail {
 template <typename... T>
 inline void LogToAndroid(int prio, const char *tag, fmt::format_string<T...> fmt, T &&...args) {
     // Using a stack-allocated buffer for performance.
@@ -74,15 +74,15 @@ inline void LogToAndroid(int prio, const char *tag, fmt::format_string<T...> fmt
     buf[result.size] = '\0';
     __android_log_write(prio, tag, buf.data());
 }
-}  // namespace vector::native::detail
+}  // namespace sys::rt::detail
 
 #ifndef NDEBUG
 #define LOGD(fmt, ...)                                                                             \
-    ::vector::native::detail::LogToAndroid(ANDROID_LOG_DEBUG, LOG_TAG, "{}:{} ({}): " fmt,         \
+    ::sys::rt::detail::LogToAndroid(ANDROID_LOG_DEBUG, LOG_TAG, "{}:{} ({}): " fmt,         \
                                            __FILE_NAME__, __LINE__,                                \
                                            __PRETTY_FUNCTION__ __VA_OPT__(, ) __VA_ARGS__)
 #define LOGV(fmt, ...)                                                                             \
-    ::vector::native::detail::LogToAndroid(ANDROID_LOG_VERBOSE, LOG_TAG,                           \
+    ::sys::rt::detail::LogToAndroid(ANDROID_LOG_VERBOSE, LOG_TAG,                           \
                                            fmt __VA_OPT__(, ) __VA_ARGS__)
 #else
 #define LOGV(...) ((void)0)
@@ -90,16 +90,16 @@ inline void LogToAndroid(int prio, const char *tag, fmt::format_string<T...> fmt
 #endif
 
 #define LOGI(fmt, ...)                                                                             \
-    ::vector::native::detail::LogToAndroid(ANDROID_LOG_INFO, LOG_TAG,                              \
+    ::sys::rt::detail::LogToAndroid(ANDROID_LOG_INFO, LOG_TAG,                              \
                                            fmt __VA_OPT__(, ) __VA_ARGS__)
 #define LOGW(fmt, ...)                                                                             \
-    ::vector::native::detail::LogToAndroid(ANDROID_LOG_WARN, LOG_TAG,                              \
+    ::sys::rt::detail::LogToAndroid(ANDROID_LOG_WARN, LOG_TAG,                              \
                                            fmt __VA_OPT__(, ) __VA_ARGS__)
 #define LOGE(fmt, ...)                                                                             \
-    ::vector::native::detail::LogToAndroid(ANDROID_LOG_ERROR, LOG_TAG,                             \
+    ::sys::rt::detail::LogToAndroid(ANDROID_LOG_ERROR, LOG_TAG,                             \
                                            fmt __VA_OPT__(, ) __VA_ARGS__)
 #define LOGF(fmt, ...)                                                                             \
-    ::vector::native::detail::LogToAndroid(ANDROID_LOG_FATAL, LOG_TAG,                             \
+    ::sys::rt::detail::LogToAndroid(ANDROID_LOG_FATAL, LOG_TAG,                             \
                                            fmt __VA_OPT__(, ) __VA_ARGS__)
 #define PLOGE(fmt, ...) LOGE(fmt " failed with error {}: {}", ##__VA_ARGS__, errno, strerror(errno))
 

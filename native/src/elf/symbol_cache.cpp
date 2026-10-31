@@ -5,7 +5,7 @@
 #include "common/config.h"
 #include "elf/elf_image.h"
 
-namespace vector::native {
+namespace sys::rt {
 
 namespace {
 // Each cached ElfImage gets its own unique_ptr and a mutex to guard its
@@ -117,4 +117,4 @@ void ElfSymbolCache::ClearCache() {
     g_linker_image.reset();
 }
 
-}  // namespace vector::native
+}  // namespace sys::rt

@@ -5,7 +5,7 @@
  * @brief Compile-time constants, version information, and platform-specific configurations.
  */
 
-namespace vector::native {
+namespace sys::rt {
 
 [[nodiscard]] constexpr bool IsDebugBuild() {
 #ifdef NDEBUG
@@ -48,4 +48,4 @@ const int kVersionCode = VERSION_CODE;
 /// The version name of the library, populated by the build system.
 const char *const kVersionName = VERSION_NAME;
 
-}  // namespace vector::native
+}  // namespace sys::rt

@@ -8,7 +8,7 @@
  * and the linker during runtime.
  */
 
-namespace vector::native {
+namespace sys::rt {
 
 // Forward declaration
 class ElfImage;
@@ -60,4 +60,4 @@ public:
     static void ClearCache();
 };
 
-}  // namespace vector::native
+}  // namespace sys::rt
