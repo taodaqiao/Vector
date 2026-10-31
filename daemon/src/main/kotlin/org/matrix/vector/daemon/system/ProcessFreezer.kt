@@ -3,7 +3,7 @@ package org.matrix.vector.daemon.system
 import android.util.Log
 import java.io.File
 
-private const val TAG = "VectorFreezer"
+private const val TAG = "SysFreezer"
 
 /**
  * Thaws a frozen process for the duration of a daemon-initiated transaction.

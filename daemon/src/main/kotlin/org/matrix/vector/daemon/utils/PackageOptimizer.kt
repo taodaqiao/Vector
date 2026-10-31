@@ -20,7 +20,7 @@ import org.matrix.vector.daemon.system.packageManager
  */
 object PackageOptimizer {
 
-  private const val TAG = "VectorOptimizer"
+  private const val TAG = "SysOptimizer"
 
   private val backend: Backend =
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)

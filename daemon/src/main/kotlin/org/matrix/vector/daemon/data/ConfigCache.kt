@@ -24,7 +24,7 @@ import org.matrix.vector.daemon.utils.InstallerVerifier
 import org.matrix.vector.daemon.utils.applySqliteHelperWorkaround
 import org.matrix.vector.daemon.utils.getRealUsers
 
-private const val TAG = "VectorConfigCache"
+private const val TAG = "SysConfigCache"
 
 object ConfigCache {
   // Module preference operations are delegated to PreferenceStore

@@ -46,7 +46,7 @@ import org.matrix.vector.daemon.utils.applyXspaceWorkaround
 import org.matrix.vector.daemon.utils.getRealUsers
 import rikka.parcelablelist.ParcelableListSlice
 
-private const val TAG = "VectorManagerService"
+private const val TAG = "SysManagerService"
 
 object ManagerService : IManagerService.Stub() {
 

@@ -119,5 +119,6 @@ Java_org_matrix_vector_daemon_env_Dex2OatServer_setSockCreateContext(JNIEnv *env
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_org_matrix_vector_daemon_env_Dex2OatServer_getSockPath(JNIEnv *env, jobject) {
-    return env->NewStringUTF("5291374ceda0aef7c5d86cd2a4f6a3ac\0");
+    // Defined by the build for this pair of binaries, so no constant sits in either artifact.
+    return env->NewStringUTF(DEV_SOCK_NAME);
 }

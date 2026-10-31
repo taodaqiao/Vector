@@ -7,7 +7,7 @@ import android.util.Log
 import java.io.File
 import org.matrix.vector.daemon.utils.FakeContext
 
-private const val TAG = "VectorDatabase"
+private const val TAG = "SysDatabase"
 private const val DB_VERSION = 4
 
 class Database(context: Context? = FakeContext()) :

@@ -18,7 +18,7 @@ import java.lang.reflect.Method
 import java.util.stream.Collectors
 import org.matrix.vector.daemon.utils.getRealUsers
 
-private const val TAG = "VectorSystem"
+private const val TAG = "SysSystem"
 const val PER_USER_RANGE = 100000
 
 /**

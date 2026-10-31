@@ -27,7 +27,7 @@ import org.matrix.vector.daemon.ipc.ManagerService
 import org.matrix.vector.daemon.ipc.ModuleAppService
 import org.matrix.vector.daemon.system.*
 
-private const val TAG = "VectorService"
+private const val TAG = "SysService"
 
 object VectorService : IVectorDaemon.Stub() {
 
@@ -46,8 +46,8 @@ object VectorService : IVectorDaemon.Stub() {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) TelephonyManager.ACTION_SECRET_CODE
       else "android.provider.Telephony.SECRET_CODE"
 
-  /** Dial *#*#832867#*#* ("VECTOR" on the keypad) to open the manager. */
-  private const val SECRET_CODE = "832867"
+  /** Dial *#*#873283#*#* to open the manager. */
+  private const val SECRET_CODE = "873283"
 
   override fun dispatchSystemServerContext(
       appThread: IBinder?,

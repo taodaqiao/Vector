@@ -5,7 +5,7 @@
 #include <errno.h>
 
 #ifndef LOG_TAG
-#define LOG_TAG    "VectorNativeDaemon"
+#define LOG_TAG    "SysNativeDaemon"
 #endif
 
 #ifdef LOG_DISABLED

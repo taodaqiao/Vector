@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import org.matrix.vector.ipc.IManagerService
 import org.matrix.vector.daemon.VectorDaemon
 
-private const val TAG = "VectorDex2Oat"
+private const val TAG = "SysDex2Oat"
 
 // Wrapper states mirrored directly from the IManagerService AIDL contract.
 val DEX2OAT_OK = IManagerService.DEX2OAT_OK
@@ -135,8 +135,37 @@ object Dex2OatServer {
       checkAndAddDex2Oat("/apex/com.android.art/bin/dex2oatd64")
     }
 
-    openDex2oat(4, "/data/adb/modules/zygisk_vector/bin/liboat_hook32.so")
-    openDex2oat(5, "/data/adb/modules/zygisk_vector/bin/liboat_hook64.so")
+    // The module directory is not a build-time constant: the zip only chooses an
+    // id, while the directory on disk is whatever the installer created.  The
+    // launcher script exports it, and the class path it builds carries daemon.apk,
+    // which lives in the same directory -- either way the name stays out of the
+    // binary.
+    val moduleDir = moduleDirectory()
+    openDex2oat(4, "$moduleDir/bin/liboat_hook32.so")
+    openDex2oat(5, "$moduleDir/bin/liboat_hook64.so")
+  }
+
+  /**
+   * Resolves the directory this module is installed in.
+   *
+   * The launcher exports it as MODDIR; the class path is the fallback, because the
+   * script always points it at daemon.apk inside that directory.  Reading our own
+   * executable is the last resort and only helps when the script was bypassed: this
+   * process is normally app_process, whose link points into /system/bin, so that
+   * branch is expected to fail rather than to be right.
+   *
+   * Returns an empty string when nothing resolves, which leaves the two hook
+   * libraries unregistered rather than pointing at a guessed path.
+   */
+  private fun moduleDirectory(): String {
+    System.getenv("MODDIR")?.takeIf { it.isNotEmpty() }?.let {
+      return it
+    }
+    System.getProperty("java.class.path")
+        ?.split(File.pathSeparator)
+        ?.firstOrNull { it.endsWith("daemon.apk") }
+        ?.let { return File(it).parent.orEmpty() }
+    return runCatching { File(Os.readlink("/proc/self/exe")).parent }.getOrNull().orEmpty()
   }
 
   private fun hasSePolicyErrors(): Boolean {

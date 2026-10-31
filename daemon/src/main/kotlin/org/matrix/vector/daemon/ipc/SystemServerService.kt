@@ -12,7 +12,7 @@ import org.matrix.vector.ipc.IFrameworkService
 import org.matrix.vector.daemon.*
 import org.matrix.vector.daemon.system.getSystemServiceManager
 
-private const val TAG = "VectorSystemServer"
+private const val TAG = "SysSystemServer"
 
 /**
  * The Android R half of [SystemServerService.registerProxyService], in a class of its own on

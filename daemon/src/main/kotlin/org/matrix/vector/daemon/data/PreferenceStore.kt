@@ -4,7 +4,7 @@ import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import org.apache.commons.lang3.SerializationUtilsX
 
-private const val TAG = "VectorPreferenceStore"
+private const val TAG = "SysPreferenceStore"
 
 object PreferenceStore {
 

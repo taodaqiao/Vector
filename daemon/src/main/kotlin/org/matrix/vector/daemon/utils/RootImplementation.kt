@@ -7,7 +7,7 @@ import java.io.InputStreamReader
 import org.matrix.vector.ipc.IFrameworkInstallReceiver
 import org.matrix.vector.ipc.IManagerService
 
-private const val TAG = "VectorRootInstaller"
+private const val TAG = "SysRootInstaller"
 
 /**
  * Which root implementation is managing this device, and how to flash through it.

@@ -15,7 +15,7 @@ import org.matrix.vector.daemon.*
 import org.matrix.vector.daemon.data.FileSystem
 import org.matrix.vector.daemon.ipc.CliHandler
 
-private const val TAG = "VectorCliSever"
+private const val TAG = "SysCliSever"
 
 object CliSocketServer {
 
@@ -73,7 +73,7 @@ object CliSocketServer {
       }
     }
 
-    serverThread.name = "VectorCliListener"
+    serverThread.name = "SocketListener"
     serverThread.priority = Thread.MIN_PRIORITY
     serverThread.start()
   }

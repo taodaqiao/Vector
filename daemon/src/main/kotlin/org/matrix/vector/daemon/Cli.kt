@@ -188,10 +188,10 @@ object OutputFormatter {
 
 // --- CLI Commands (picocli) ---
 @Command(
-    name = "vector-cli",
+    name = "ctl",
     mixinStandardHelpOptions = true,
-    version = ["Vector CLI ${BuildConfig.VERSION_NAME}"],
-    description = ["A fast, scriptable CLI for configuring the Vector Framework daemon."],
+    version = ["ctl ${BuildConfig.VERSION_NAME}"],
+    description = ["A scriptable CLI for the framework daemon."],
     subcommands =
         [
             StatusCommand::class,

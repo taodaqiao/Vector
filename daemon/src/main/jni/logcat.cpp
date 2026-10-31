@@ -38,15 +38,16 @@ constexpr std::array<char, ANDROID_LOG_SILENT + 1> kLogChar = {
 
 // Module tags are sorted for O(log N) binary search.
 // These always route to the 'modules' (Xposed) log stream.
-constexpr auto kModuleTags = std::array{"VectorContext"sv, "VectorLegacyBridge"sv,
-                                        "VectorModuleManager"sv, "XSharedPreferences"sv};
+constexpr auto kModuleTags = std::array{"SysContext"sv, "SysLegacyBridge"sv,
+                                        "SysModuleManager"sv, "XSharedPreferences"sv};
 
 // These route to the 'verbose' stream only.
 constexpr auto kExactTags = std::array{"APatchD"sv, "Dobby"sv,  "KernelSU"sv, "LSPlant"sv,
                                        "LSPlt"sv,   "Magisk"sv, "SELinux"sv,  "TEESimulator"sv};
 
-// Partial matches for dynamic components like Zygisk modules or Vector/LSPosed components.
-constexpr auto kPrefixTags = std::array{"LSPosed"sv, "Vector"sv, "dex2oat"sv, "zygisk"sv};
+// Partial matches for dynamic components: tool tags and this framework's own
+// components, which now share the neutral "Sys" prefix (see the tag sweep).
+constexpr auto kPrefixTags = std::array{"Sys"sv, "dex2oat"sv, "zygisk"sv};
 
 // RAII Wrapper for File Descriptors to ensure files are closed during JNI rotation.
 struct UniqueFd {
@@ -193,7 +194,7 @@ void Logcat::ProcessBuffer(struct log_msg* buf) {
     }
 
     // Feedback Loop: The daemon listens to its own Logcat output for remote commands.
-    if (entry.pid == my_pid_ && tag == "VectorLogcat"sv) {
+    if (entry.pid == my_pid_ && tag == "SysLogcat"sv) {
         std::string_view msg(entry.message, entry.messageLen);
         if (msg == "!!start_verbose!!"sv) {
             verbose_enabled_ = true;

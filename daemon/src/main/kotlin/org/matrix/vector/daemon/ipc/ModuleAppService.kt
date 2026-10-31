@@ -33,7 +33,7 @@ import org.matrix.vector.daemon.system.ProcessFreezer
 import org.matrix.vector.daemon.system.PER_USER_RANGE
 import org.matrix.vector.daemon.system.activityManager
 
-private const val TAG = "VectorModuleAppService"
+private const val TAG = "SysModuleAppService"
 
 /**
  * A module's service as its own **app** sees it — libxposed's `IXposedService`.
@@ -52,7 +52,7 @@ class ModuleAppService(private val loadedModule: LoadedModule) : IXposedService.
     // Per-target serialization lives on the target itself; this only keeps one slow target from
     // delaying another.
     private val hotReloadExecutor =
-        Executors.newCachedThreadPool { r -> Thread(r, "vector-hot-reload") }
+        Executors.newCachedThreadPool { r -> Thread(r, "pool-1-thread-1") }
 
     // How long a target gets to answer. Generous, because the whole point is that the callee runs
     // module code - but finite, because binder is not, and a target left in RELOADING answers every
@@ -150,7 +150,7 @@ class ModuleAppService(private val loadedModule: LoadedModule) : IXposedService.
     // delivery of every *other* module's binder behind it: eight and a half seconds, measured, on
     // a device where one module app was crash-looping. One thread per module keeps that local.
     private val binderExecutor =
-        Executors.newCachedThreadPool { r -> Thread(r, "vector-module-binder") }
+        Executors.newCachedThreadPool { r -> Thread(r, "pool-3-thread-1") }
 
     fun uidClear() {
       uidSet.clear()

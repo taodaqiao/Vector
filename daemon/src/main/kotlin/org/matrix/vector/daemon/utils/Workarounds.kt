@@ -12,7 +12,7 @@ import android.util.Log
 import java.lang.ClassNotFoundException
 import org.matrix.vector.daemon.system.*
 
-private const val TAG = "VectorWorkarounds"
+private const val TAG = "SysWorkarounds"
 private val isLenovo = Build.MANUFACTURER.equals("lenovo", ignoreCase = true)
 private val isXiaomi = Build.MANUFACTURER.equals("xiaomi", ignoreCase = true)
 

@@ -6,7 +6,7 @@ import android.util.Log
 import org.matrix.vector.ipc.ScopeEntry
 import org.matrix.vector.daemon.system.NotificationManager
 
-private const val TAG = "VectorModuleDatabase"
+private const val TAG = "SysModuleDatabase"
 
 /**
  * The module configuration: what the user asked for.

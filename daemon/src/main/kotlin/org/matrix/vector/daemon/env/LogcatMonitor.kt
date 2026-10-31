@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import org.matrix.vector.daemon.VectorDaemon
 import org.matrix.vector.daemon.data.FileSystem
 
-private const val TAG = "VectorLogcat"
+private const val TAG = "SysLogcat"
 private const val FD_MODE =
     ParcelFileDescriptor.MODE_WRITE_ONLY or
         ParcelFileDescriptor.MODE_CREATE or

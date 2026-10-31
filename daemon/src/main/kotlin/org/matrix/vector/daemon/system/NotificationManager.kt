@@ -24,9 +24,9 @@ import org.matrix.vector.daemon.R
 import org.matrix.vector.daemon.data.FileSystem
 import org.matrix.vector.daemon.utils.FakeContext
 
-private const val TAG = "VectorNotificationManager"
-private const val STATUS_CHANNEL_ID = "vector_status"
-private const val UPDATED_CHANNEL_ID = "vector_module_updated"
+private const val TAG = "SysNotificationManager"
+private const val STATUS_CHANNEL_ID = "sys_status"
+private const val UPDATED_CHANNEL_ID = "sys_module_updated"
 private const val STATUS_NOTIF_ID = BuildConfig.MANAGER_INJECTED_UID
 
 /**
@@ -60,7 +60,7 @@ object NotificationManager {
   val openManagerAction = UUID.randomUUID().toString()
   val moduleScopeAction = UUID.randomUUID().toString()
 
-  val SCOPE_CHANNEL_ID = "vector_module_scope"
+  val SCOPE_CHANNEL_ID = "sys_module_scope"
 
   private val nm: android.app.INotificationManager? by
       SystemService(
@@ -68,7 +68,49 @@ object NotificationManager {
   private val opPkg =
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) "android" else "com.android.settings"
 
+  // The platform has changed this call's name and parameter list more than once, so it is made
+  // reflectively: whatever the running build exposes gets called, and a build that exposes
+  // nothing keeps the stale channel instead of taking the daemon down. Deleting a channel that
+  // does not exist is a no-op, so this is repeated every boot rather than guarded by a marker —
+  // that way a build where the call failed is retried instead of being given up on.
+  private fun invokeDeleteChannel(iface: Any?, channelId: String) {
+    if (iface == null) return
+    for (method in iface.javaClass.methods) {
+      if (!method.name.startsWith("deleteNotificationChannel")) continue
+      var strings = 0
+      var usable = true
+      val args =
+          Array<Any?>(method.parameterTypes.size) { index ->
+            when (val type = method.parameterTypes[index]) {
+              String::class.java -> if (strings++ == 0) "android" else channelId
+              Int::class.javaPrimitiveType,
+              Integer::class.java -> 1000
+              Boolean::class.javaPrimitiveType,
+              java.lang.Boolean::class.java -> false
+              else -> {
+                usable = false
+                type
+              }
+            }
+          }
+      if (!usable) continue
+      runCatching { method.invoke(iface, *args) }
+    }
+  }
+
+  private fun retireOldChannels() {
+    listOf(
+            "vector_status",
+            "vector_module_updated",
+            "vector_module_scope",
+            "sys_status_v0",
+            "sys_module_updated_v0",
+            "sys_module_scope_v0")
+        .forEach { invokeDeleteChannel(nm, it) }
+  }
+
   private fun createChannels() {
+    retireOldChannels()
     val context = FakeContext()
     val list =
         listOf(
@@ -132,7 +174,6 @@ object NotificationManager {
             .setVisibility(Notification.VISIBILITY_SECRET)
             .setOngoing(true)
             .build()
-            .apply { extras.putString("android.substName", BuildConfig.FRAMEWORK_NAME) }
 
     createChannels()
     runCatching {
@@ -483,7 +524,6 @@ object NotificationManager {
                             // through it.
                             scopePkgs.joinToString())))
             .build()
-            .apply { extras.putString("android.substName", BuildConfig.FRAMEWORK_NAME) }
 
     createChannels()
     val enqueued =
@@ -578,7 +618,6 @@ object NotificationManager {
             .setAutoCancel(true)
             .setStyle(Notification.BigTextStyle().bigText(content))
             .build()
-            .apply { extras.putString("android.substName", BuildConfig.FRAMEWORK_NAME) }
 
     createChannels()
     // The two notices this function posts are told apart, because only one of them can be made

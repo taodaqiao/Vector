@@ -31,7 +31,7 @@ import org.matrix.vector.daemon.ipc.ManagerService
 import org.matrix.vector.daemon.ipc.SystemServerService
 import org.matrix.vector.daemon.utils.applyNotificationWorkaround
 
-private const val TAG = "VectorDaemon"
+private const val TAG = "SysDaemon"
 private const val ACTION_SEND_BINDER = 1
 
 object VectorDaemon {
@@ -64,7 +64,7 @@ object VectorDaemon {
    * place a restart changes its mind about the rendezvous is the place the name is read from.
    */
   val proxyServiceName: String
-    get() = if (startedAfterSystemServer) "serial_vector" else "serial"
+    get() = if (startedAfterSystemServer) "cmdex_alt" else "cmdex"
 
   /**
    * The `activity` binder this daemon last linked its death recipient through.
@@ -123,7 +123,7 @@ object VectorDaemon {
 
     // Initializes system frameworks inside the daemon process
     ActivityThread.systemMain()
-    DdmHandleAppName.setAppName("org.matrix.vector.daemon", 0)
+    DdmHandleAppName.setAppName("android.bg", 0)
 
     // Wait for Android core services
     waitForSystemService("package")
