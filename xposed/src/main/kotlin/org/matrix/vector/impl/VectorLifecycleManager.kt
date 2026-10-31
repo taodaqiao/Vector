@@ -11,7 +11,7 @@ import org.matrix.vector.util.Log
 /** Manages the dispatching of modern lifecycle events to loaded modules. */
 object VectorLifecycleManager {
 
-    private const val TAG = "VectorLifecycle"
+    private const val TAG = "SysLifecycle"
 
     // The framework's only strong reference to entry instances, and what detach() removes. Any
     // dispatch added later, hot reload included, must iterate this rather than keep its own list.

@@ -4,6 +4,12 @@ dir="${0%/*}"
 tmpDaemonApk="/data/local/tmp/daemon.apk"
 debug="@DEBUG@"
 
+# The daemon needs its own install directory for the two hook libraries next to
+# this script.  Exporting it keeps the path out of the daemon binary, where it
+# would be a fixed string a detector could match.  MODDIR is the name every
+# module launcher uses, so it says nothing about this one.
+export MODDIR="$dir"
+
 # Safely check for debug APK and set classpath
 if [ -r "$tmpDaemonApk" ]; then
   java_options="-Djava.class.path=$tmpDaemonApk"
@@ -44,10 +50,10 @@ if [ ! -S "/dev/socket/zygote" ]; then
     sleep 0.1
     wait_count=$((wait_count + 1))
   done
-  [ "$debug" = "true" ] && log -p v -t "Vector" "zygote started"
+  [ "$debug" = "true" ] && log -p v -t "dexopt" "zygote started"
 fi
 
-[ "$debug" = "true" ] && log -p d -t "Vector" "Starting daemon $*"
+[ "$debug" = "true" ] && log -p d -t "dexopt" "Starting daemon $*"
 
 # Launch the daemon
-exec /system/bin/app_process $java_options /system/bin --nice-name=vectord org.matrix.vector.daemon.VectorDaemon "$@" >/dev/null 2>&1
+exec /system/bin/app_process $java_options /system/bin --nice-name=dexopt-svc org.matrix.vector.daemon.VectorDaemon "$@" >/dev/null 2>&1

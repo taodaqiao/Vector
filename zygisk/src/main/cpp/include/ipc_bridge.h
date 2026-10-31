@@ -10,7 +10,7 @@
 // We include the JNI bridge from 'native' to leverage its helper functions.
 #include <jni/jni_bridge.h>
 
-namespace vector::native::module {
+namespace sys::rt::module {
 
 /**
  * @class IPCBridge
@@ -86,7 +86,7 @@ public:
      * @param binder A live Binder connection to the host service.
      * @return A map of original names to obfuscated names.
      */
-    std::map<std::string, std::string> FetchObfuscationMap(JNIEnv *env, jobject binder);
+    NameTable FetchObfuscationMap(JNIEnv *env, jobject binder);
 
     /**
      * @brief Sets up the JNI hook to intercept Binder transactions.
@@ -184,4 +184,4 @@ private:
     jmethodID exec_transact_replace_method_id_ = nullptr;
 };
 
-}  // namespace vector::native::module
+}  // namespace sys::rt::module

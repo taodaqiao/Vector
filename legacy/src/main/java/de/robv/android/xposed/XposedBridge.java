@@ -43,7 +43,7 @@ public final class XposedBridge {
     /**
      * @hide
      */
-    public static final String TAG = "VectorLegacyBridge";
+    public static final String TAG = "SysLegacyBridge";
 
     /**
      * @deprecated Use {@link #getXposedVersion()} instead.
@@ -101,8 +101,12 @@ public final class XposedBridge {
             ClassLoader myCL = XposedBridge.class.getClassLoader();
             assert myCL != null;
             dummyClassLoader = ResourcesHook.buildDummyClassLoader(myCL.getParent(), resClass.getName(), taClass.getName());
-            dummyClassLoader.loadClass("xposed.dummy.XResourcesSuperClass");
-            dummyClassLoader.loadClass("xposed.dummy.XTypedArraySuperClass");
+            // Defined eagerly, and this is not negotiable: ART records a failed resolution for the
+            // life of the process, so a single lookup that happens before the dummy class loader is
+            // installed poisons XResources for every later use. The names no longer say anything
+            // about what this is, which is the part that used to make a `Class.forName` probe work.
+            dummyClassLoader.loadClass("rt.dummy.XResourcesSuperClass");
+            dummyClassLoader.loadClass("rt.dummy.XTypedArraySuperClass");
             XposedHelpers.setObjectField(myCL, "parent", dummyClassLoader);
         } catch (Throwable throwable) {
             XposedBridge.log(throwable);

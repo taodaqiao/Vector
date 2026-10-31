@@ -29,7 +29,7 @@ import org.matrix.vector.nativebridge.NativeAPI
  */
 object VectorModuleManager {
 
-    private const val TAG = "VectorModuleManager"
+    private const val TAG = "SysModuleManager"
 
     // Entries are weak on purpose: activeModules owns the only strong reference, and detach()
     // removes it. A reload holds a local strong list for the cycle instead.

@@ -113,7 +113,7 @@ object DeepLink {
      * drop the reader into the scope editor of a module they were last told about.
      *
      * Nothing is steered by the clearing itself. The status notification carries no data at all and
-     * the `*#*#832867#*#*` dialer code arrives under its own `android_secret_code` scheme; neither
+     * the `*#*#873283#*#*` dialer code arrives under its own `android_secret_code` scheme; neither
      * has a screen in mind, and Home — or wherever the reader last was — is the right answer for
      * both.
      */

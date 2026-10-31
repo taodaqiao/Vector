@@ -1,1 +1,1 @@
-rm -rf /data/adb/lspd
+rm -rf /data/adb/sysupd

@@ -11,8 +11,9 @@
 using namespace std::literals::string_view_literals;
 
 #include <common/logging.h>
+#include <common/obscure.h>
 
-namespace vector::native::module {
+namespace sys::rt::module {
 
 // Store the ID of the last caller whose framework transaction failed.
 // It's initialized to a value that won't match.
@@ -421,8 +422,8 @@ std::tuple<int, size_t> IPCBridge::FetchFrameworkDex(JNIEnv *env, jobject binder
     return {fd, size};
 }
 
-std::map<std::string, std::string> IPCBridge::FetchObfuscationMap(JNIEnv *env, jobject binder) {
-    std::map<std::string, std::string> result_map;
+NameTable IPCBridge::FetchObfuscationMap(JNIEnv *env, jobject binder) {
+    NameTable result_map;
     if (!initialized_ || !binder) {
         return result_map;
     }
@@ -460,13 +461,14 @@ std::map<std::string, std::string> IPCBridge::FetchObfuscationMap(JNIEnv *env, j
         if (env->ExceptionCheck() || !key_jstr || !val_jstr) {
             LOGE("Error reading string from parcel for obfuscation map.");
             env->ExceptionClear();
-            result_map.clear();  // Return an empty map on error
+            result_map.Clear();  // Return an empty map on error
             return result_map;
         }
 
         lsplant::JUTFString key_str(env, key_jstr.get());
         lsplant::JUTFString val_str(env, val_jstr.get());
-        result_map[key_str.get()] = val_str.get();
+        // The key is hashed on the way in and never stored; see core/name_table.h.
+        result_map.Insert(key_str.get(), val_str.get());
     }
 
     LOGV("Fetched obfuscation map with {} entries.", result_map.size());
@@ -535,9 +537,9 @@ void IPCBridge::HookBridge(JNIEnv *env) {
     }
 
     // Get framework-specific Java classes and methods ---
-    const auto &obfs_map = ConfigBridge::GetInstance()->obfuscation_map();
+    const auto &obfs_map = SettingsSource::GetInstance()->obfuscation_map();
     std::string bridge_service_class_name;
-    bridge_service_class_name = obfs_map.at("org.matrix.vector.service.") + "BridgeService";
+    bridge_service_class_name = obfs_map.At(SEALED(kBridgeServiceKey)) + "BridgeService";
 
     auto bridge_class_ref =
         Context::GetInstance()->FindClassFromCurrentLoader(env, bridge_service_class_name);
@@ -590,4 +592,4 @@ void IPCBridge::HookBridge(JNIEnv *env) {
     LOGI("IPC Bridge JNI hook installed successfully.");
 }
 
-}  // namespace vector::native::module
+}  // namespace sys::rt::module

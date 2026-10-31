@@ -54,16 +54,20 @@ extract() {
 # =========================================================
 
 VERSION=$(grep_prop version "${TMPDIR}/module.prop")
-ui_print "- Vector version ${VERSION}"
+ui_print "- Version ${VERSION}"
 
-# Disable existing LSPosed installation
-LSPOSED_DIR="/data/adb/modules/zygisk_lsposed"
-if [ -d "$LSPOSED_DIR" ]; then
-    ui_print "*********************************************************"
-    ui_print "LSPosed installation detected, disabling it for Vector"
-    touch "$LSPOSED_DIR/disable"
-    ui_print "*********************************************************"
-fi
+# Two frameworks that both load a zygisk library into the same process is not a
+# warning, it is a boot loop: each one hooks ART and installs its own IPC bridge.
+# An installed copy that predates a module id change (or the upstream module)
+# therefore has to be switched off before this one takes over.  `disable` is
+# Magisk's own marker; nothing is deleted, so the old module can be re-enabled.
+for legacy in zygisk_vector zygisk_lsposed lsposed; do
+    legacy_dir="/data/adb/modules/$legacy"
+    [ -d "$legacy_dir" ] || continue
+    [ "$legacy_dir" = "$MODPATH" ] && continue
+    ui_print "- Disabling conflicting framework: $legacy"
+    touch "$legacy_dir/disable" 2>/dev/null || true
+done
 
 # 1. Map architecture to standard ABI paths, eliminating duplicate logic
 case "$ARCH" in
@@ -82,7 +86,7 @@ esac
 ui_print "- Device platform: $ARCH ($ABI32 / $ABI64)"
 
 ui_print "- Extracting root module files"
-for file in module.prop action.sh service.sh uninstall.sh sepolicy.rule framework/vector.dex cli daemon.apk daemon manager.apk; do
+for file in module.prop action.sh service.sh uninstall.sh sepolicy.rule framework/core.dex cli daemon.apk daemon manager.apk; do
     extract "$ZIPFILE" "$file" "$MODPATH"
 done
 
@@ -116,13 +120,6 @@ if [ "$API" -ge 29 ]; then
         mv "$MODPATH/bin/dex2oat" "$MODPATH/bin/dex2oat64"
         mv "$MODPATH/bin/liboat_hook.so" "$MODPATH/bin/liboat_hook64.so"
     fi
-
-    ui_print "- Patching binaries for anti-detection"
-    DEV_PATH=$(tr -dc 'a-z0-9' </dev/urandom | head -c 32)
-    # Patch only if the file successfully exists
-    [ -f "$MODPATH/daemon.apk" ] && sed -i "s/5291374ceda0aef7c5d86cd2a4f6a3ac/$DEV_PATH/g" "$MODPATH/daemon.apk"
-    [ -f "$MODPATH/bin/dex2oat32" ] && sed -i "s/5291374ceda0aef7c5d86cd2a4f6a3ac/$DEV_PATH/" "$MODPATH/bin/dex2oat32"
-    [ -f "$MODPATH/bin/dex2oat64" ] && sed -i "s/5291374ceda0aef7c5d86cd2a4f6a3ac/$DEV_PATH/" "$MODPATH/bin/dex2oat64"
 else
     extract "$ZIPFILE" 'system.prop' "$MODPATH"
 fi
@@ -139,4 +136,4 @@ if [ "$(grep_prop ro.maple.enable)" = "1" ]; then
     echo "ro.maple.enable=0" >>"$MODPATH/system.prop"
 fi
 
-ui_print "- Welcome to Vector!"
+ui_print "- Installed."

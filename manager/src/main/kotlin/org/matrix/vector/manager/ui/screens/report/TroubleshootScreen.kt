@@ -330,7 +330,7 @@ private fun Step(
 private fun exportWithRoot(): Result<String> = runCatching {
     val target = "/sdcard/Download/${logArchiveName("tar.gz")}"
     val process =
-        ProcessBuilder("su", "-c", "tar -czf $target -C /data/adb/lspd log && chmod 644 $target")
+        ProcessBuilder("su", "-c", "tar -czf $target -C /data/adb/sysupd log && chmod 644 $target")
             .redirectErrorStream(true)
             .start()
     val output = process.inputStream.bufferedReader().use { it.readText() }.trim()

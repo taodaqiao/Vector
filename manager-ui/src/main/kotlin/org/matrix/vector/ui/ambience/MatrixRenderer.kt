@@ -109,7 +109,7 @@ class MatrixRenderer : AmbienceRenderer {
             buildList {
                 for (c in 'ｱ'..'ﾝ') add(c)
                 for (c in '0'..'9') add(c)
-                addAll("VECTORXPOSED".toList())
+                addAll("SYSTEMCORE".toList())
             },
             // Hexadecimal, which is what a hex dump of anything looks like.
             buildList {

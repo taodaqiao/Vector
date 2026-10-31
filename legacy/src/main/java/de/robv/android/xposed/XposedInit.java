@@ -312,7 +312,7 @@ public final class XposedInit {
                 Log.e(TAG, "  Cannot load module: " + name);
                 Log.e(TAG, "  The Xposed API classes are compiled into the module's APK.");
                 Log.e(TAG, "  This may cause strange issues and must be fixed by the module developer.");
-                Log.e(TAG, "  For details, see: https://api.xposed.info/using.html");
+                Log.e(TAG, "  Ship the API classes with compileOnly, not as a bundled copy.");
                 return false;
             }
         } catch (ClassNotFoundException ignored) {

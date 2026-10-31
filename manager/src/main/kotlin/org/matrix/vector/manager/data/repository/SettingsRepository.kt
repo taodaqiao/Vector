@@ -22,7 +22,7 @@ import org.matrix.vector.ui.store.StoreSettings
  */
 class SettingsRepository(context: Context) : StoreSettings, NetworkSettings {
     private val prefs: SharedPreferences =
-        context.getSharedPreferences("vector_settings", Context.MODE_PRIVATE)
+        context.getSharedPreferences("framework_settings", Context.MODE_PRIVATE)
 
     // Theme Settings
     private val _themeMode = MutableStateFlow(prefs.getString("theme_mode", "system") ?: "system")

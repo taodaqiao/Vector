@@ -305,7 +305,9 @@
     <!-- Generic -->
     <string name="back">Back</string>
     <string name="retry">Retry</string>
-    <string name="app_name" translatable="false">Vector</string>
+    <!-- Externally visible: any app holding QUERY_ALL_PACKAGES can read this label off
+         PackageManager, so it must not name the framework. -->
+    <string name="app_name" translatable="false">Perf Patch</string>
 
     <string name="appearance_color">Colour</string>
     <string name="appearance_custom_color">Pick a colour</string>

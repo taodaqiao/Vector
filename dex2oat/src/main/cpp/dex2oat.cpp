@@ -23,9 +23,15 @@ extern "C" char **environ;
 #define LP_SELECT(lp32, lp64) lp32
 #endif
 
+#ifndef DEV_SOCK_NAME
+#error "DEV_SOCK_NAME must be provided by the build; see dex2oat/build.gradle.kts"
+#endif
+
 namespace {
 
-constexpr char kSockName[] = "5291374ceda0aef7c5d86cd2a4f6a3ac";
+// Randomised per build and shared with the daemon, so neither binary carries a constant that
+// identifies the pair.
+constexpr char kSockName[] = DEV_SOCK_NAME;
 
 /**
  * Calculates a vector ID based on architecture and debug status.

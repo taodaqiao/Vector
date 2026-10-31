@@ -8,6 +8,6 @@ cd "$MODDIR" || exit 1
 # root slave before handing over, which is what keeps the daemon's dex2oat bind-mounts out of
 # the global one.
 unshare -m /system/bin/sh -c '
-    mount -o rslave none / || echo "vector: this mount namespace stays shared" >&2
+    mount -o rslave none / || echo "init: this mount namespace stays shared" >&2
     exec "$0" "$@"
 ' "$MODDIR/daemon" "$@" &

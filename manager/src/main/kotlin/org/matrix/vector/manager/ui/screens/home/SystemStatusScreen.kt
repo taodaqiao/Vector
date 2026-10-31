@@ -494,7 +494,7 @@ private fun rootManagerName(presence: ManagerPresence): String =
     }
 
 /** Must match `SECRET_CODE` in the daemon's VectorService, which is what actually answers it. */
-private const val SECRET_CODE = "*#*#832867#*#*"
+private const val SECRET_CODE = "*#*#873283#*#*"
 
 /**
  * Every route row, whatever it currently shows.

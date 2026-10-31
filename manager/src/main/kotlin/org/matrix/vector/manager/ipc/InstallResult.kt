@@ -122,7 +122,7 @@ suspend fun Context.commitForResult(
 }
 
 /** Only ever a prefix; the session id and a UUID follow. */
-private const val RESULT_ACTION = "org.matrix.vector.manager.INSTALL_RESULT"
+private const val RESULT_ACTION = "org.matrix.vector.manager.INSTALL_DONE"
 
 /** `PackageManager.INSTALL_REPLACE_EXISTING`, `@hide` like the field it belongs in. */
 private const val INSTALL_REPLACE_EXISTING = 0x00000002

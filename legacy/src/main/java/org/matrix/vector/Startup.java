@@ -6,6 +6,7 @@ import org.matrix.vector.impl.core.VectorStartup;
 import org.matrix.vector.impl.di.VectorBootstrap;
 import org.matrix.vector.legacy.LegacyDelegateImpl;
 
+
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedInit;
 
@@ -33,7 +34,10 @@ public class Startup {
         // Establish the Dependency Injection contract
         VectorBootstrap.INSTANCE.init(new LegacyDelegateImpl());
 
-        // Initialize legacy resources and state
+        // Initialize legacy resources and state.
+        // Eager on purpose: the dummy resource classes must exist before anything resolves
+        // XResources, and ART never retries a resolution that already failed. Deferring this to the
+        // first resource-API use was tried and breaks every process that touches the class earlier.
         XposedBridge.initXResources();
         XposedInit.startsSystemServer = isSystem;
 

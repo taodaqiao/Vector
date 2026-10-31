@@ -25,7 +25,7 @@ object Constants {
      * Nothing logs with it directly. [logE], [logW] and [logI] hold it, and the conventions for
      * what a message says and which level it says it at are documented on them.
      */
-    const val TAG = "VectorManager"
+    const val TAG = "SysManager"
 
     @JvmStatic
     fun setBinder(binder: IBinder): Boolean {

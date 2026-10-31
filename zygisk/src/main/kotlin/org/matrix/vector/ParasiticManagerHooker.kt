@@ -32,6 +32,14 @@ import org.matrix.vector.impl.core.VectorServiceClient
 object ParasiticManagerHooker {
     private const val CHROMIUM_WEBVIEW_FACTORY_METHOD = "create"
 
+    /**
+     * Where the manager's own classes live. This is the *source namespace*, not the installed
+     * package name: the two are deliberately different here, so anything built by appending to
+     * `ManagerPackageName` names a class that does not exist. The manifest spells the same
+     * activity out absolutely for the same reason.
+     */
+    private const val MANAGER_CLASS_PREFIX = "org.matrix.vector.manager"
+
     private var managerPkgInfo: PackageInfo? = null
     private var managerFd: Int = -1
 
@@ -66,10 +74,11 @@ object ParasiticManagerHooker {
                     // contexts.
                     // We copy the APK to the host's cache as a workaround.
                     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                        // The pre-rename name, removed so an upgraded host is not left carrying a
-                        // stale copy of the manager in its cache forever.
-                        runCatching { File("${appInfo.dataDir}/cache/lsposed.apk").delete() }
-                        val dstPath = "${appInfo.dataDir}/cache/vector-manager.apk"
+                        // The cache copy is named plainly on purpose: an apt file name here is a
+                        // better disguise than an unusual one, and a stale copy left by an earlier
+                        // build in this app's own private cache is not something another app can
+                        // enumerate. Deleting by earlier name would only reintroduce those names.
+                        val dstPath = "${appInfo.dataDir}/cache/manager.apk"
                         runCatching {
                                 FileInputStream(sourcePath).use { input ->
                                     FileOutputStream(dstPath).use { output ->
@@ -135,7 +144,7 @@ object ParasiticManagerHooker {
         runCatching {
                 val clazz =
                     XposedHelpers.findClass(
-                        BuildConfig.ManagerPackageName + ".Constants",
+                        MANAGER_CLASS_PREFIX + ".Constants",
                         classLoader,
                     )
                 val ok =
@@ -247,7 +256,7 @@ object ParasiticManagerHooker {
                                 getManagerPkgInfo(arg.applicationInfo) ?: return@forEachIndexed
                             pkgInfo.activities
                                 ?.find {
-                                    it.name == BuildConfig.ManagerPackageName + ".ui.MainActivity"
+                                    it.name == MANAGER_CLASS_PREFIX + ".ui.MainActivity"
                                 }
                                 ?.let {
                                     it.applicationInfo = pkgInfo.applicationInfo
@@ -258,7 +267,7 @@ object ParasiticManagerHooker {
                             arg.component =
                                 ComponentName(
                                     arg.component!!.packageName,
-                                    BuildConfig.ManagerPackageName + ".ui.MainActivity",
+                                    MANAGER_CLASS_PREFIX + ".ui.MainActivity",
                                 )
                         }
                     }

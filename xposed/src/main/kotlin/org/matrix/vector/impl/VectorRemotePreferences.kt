@@ -81,7 +81,7 @@ internal class VectorRemotePreferences(service: IModuleService, group: String) :
                 }
             }
         } catch (e: RemoteException) {
-            Log.e("VectorContext", "Failed to request remote preferences for group: $group", e)
+            Log.e("SysContext", "Failed to request remote preferences for group: $group", e)
             throw XposedFrameworkError("Remote preferences IPC failure", e)
         }
     }

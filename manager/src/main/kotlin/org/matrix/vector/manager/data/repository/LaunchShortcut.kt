@@ -53,7 +53,7 @@ object LaunchShortcut {
      * Changing this string does not move an existing shortcut, it orphans it: the old one stays on
      * the home screen pointing at whatever it was built with, and [update] can no longer find it.
      */
-    private const val ID = "org.matrix.vector.manager.shortcut"
+    private const val ID = "org.matrix.vector.manager.launch"
 
     /** What [ParasiticManagerSystemHooker] matches on to redirect the activity. */
     private val category = "${BuildConfig.MANAGER_PACKAGE_NAME}.LAUNCH_MANAGER"

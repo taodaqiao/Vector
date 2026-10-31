@@ -8,7 +8,7 @@
 -keep class android.** { *; }
 -keep class de.robv.android.xposed.** { *; }
 
-# The in-memory built class xposed.dummy.XResourcesSuperClass exists only on the device, so the
+# The in-memory built class rt.dummy.XResourcesSuperClass exists only on the device, so the
 # class below is a deliberate split: it isolates the reference to XResources from its owner, which
 # would otherwise be verified long before that super class exists.
 -keepclassmembers class org.matrix.vector.legacy.LegacyDelegateImpl$ResourceProxy { *; }

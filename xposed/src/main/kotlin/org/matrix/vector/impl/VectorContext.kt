@@ -20,7 +20,7 @@ import org.matrix.vector.impl.hooks.VectorHookBuilder
 import org.matrix.vector.impl.hooks.VectorMethodInvoker
 import org.matrix.vector.nativebridge.HookBridge
 
-private const val TAG = "VectorContext"
+private const val TAG = "SysContext"
 
 /** Smallest positive gap between the sorted addresses, i.e. one ArtMethod. */
 private fun strideOf(addresses: LongArray): Long {
@@ -188,7 +188,7 @@ class VectorContext(
      * whose code the request was made from.
      */
     override fun log(priority: Int, tag: String?, msg: String, tr: Throwable?) {
-        val finalTag = tag ?: "VectorContext"
+        val finalTag = tag ?: "SysContext"
         val prefix = if (packageName.isNotEmpty()) "$packageName: " else ""
         val fullMsg = buildString {
             append(prefix).append(msg)

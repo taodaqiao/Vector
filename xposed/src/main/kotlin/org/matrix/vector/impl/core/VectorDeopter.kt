@@ -11,7 +11,7 @@ import org.matrix.vector.nativebridge.HookBridge
  */
 object VectorDeopter {
 
-    private const val TAG = "VectorDeopter"
+    private const val TAG = "SysDeopter"
 
     @JvmStatic
     fun deoptMethods(where: String, cl: ClassLoader?) {

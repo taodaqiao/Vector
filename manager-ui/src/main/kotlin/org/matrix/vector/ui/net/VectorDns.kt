@@ -13,7 +13,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.dnsoverhttps.DnsOverHttps
 
-private const val TAG = "VectorDns"
+private const val TAG = "SysDns"
 
 /**
  * The DoH preference, read by the resolver and written by the settings UI.

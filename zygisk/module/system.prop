@@ -1,1 +1,6 @@
-dalvik.vm.dex2oat-flags=--inline-max-code-units=0
+# `dalvik.vm.dex2oat-flags` is a public property: every application can read it
+# with a single getprop, and `--inline-max-code-units=0` is not a value the
+# platform ever sets on its own.  Leaving it out costs inlining-dependent hooks
+# on Android 8.1 and 9 only (Magisk only installs this file below API 29);
+# restore the line if hook stability there matters more than the signature.
+#dalvik.vm.dex2oat-flags=--inline-max-code-units=0

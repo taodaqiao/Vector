@@ -9,7 +9,7 @@ import org.matrix.vector.ipc.IHotReloadOutcomeReceiver
 import org.matrix.vector.ipc.IProcessChannel
 import org.matrix.vector.util.Log
 
-private const val TAG = "VectorProcessChannel"
+private const val TAG = "SysProcessChannel"
 
 /**
  * This process's end of the only channel the daemon has for calling in.
@@ -26,7 +26,7 @@ object VectorProcessChannel : IProcessChannel.Stub() {
      * delivered it would hold one of this app's binder threads for as long as the module's
      * onHotReloading cares to take.
      */
-    private val worker = Executors.newSingleThreadExecutor { Thread(it, "vector-hot-reload") }
+    private val worker = Executors.newSingleThreadExecutor { Thread(it, "pool-1-thread-1") }
 
     override fun hotReload(
         modulePackageName: String?,

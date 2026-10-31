@@ -21,7 +21,7 @@ import org.matrix.vector.manager.BuildConfig
  * export shells out to `tar`, which is what Android actually ships. Only the extension differs.
  */
 fun logArchiveName(extension: String): String =
-    "Vector-logs-${BuildConfig.BUILD_TYPE}-${LocalDateTime.now().format(ARCHIVE_STAMP)}.$extension"
+    "logs-${BuildConfig.BUILD_TYPE}-${LocalDateTime.now().format(ARCHIVE_STAMP)}.$extension"
 
 /**
  * Which build wrote an archive, for the archive itself to carry.

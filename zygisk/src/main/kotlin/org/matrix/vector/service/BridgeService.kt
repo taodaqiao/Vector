@@ -19,7 +19,7 @@ import org.matrix.vector.util.Log
 object BridgeService {
     private const val TRANSACTION_CODE =
         ('_'.code shl 24) or ('V'.code shl 16) or ('E'.code shl 8) or 'C'.code
-    private const val TAG = "VectorZygiskBridge"
+    private const val TAG = "SysZygiskBridge"
 
     /** Actions supported by the manual IPC bridge. */
     private enum class Action {

@@ -1,7 +1,9 @@
 #include <common/config.h>
 #include <common/logging.h>
+#include <common/obscure.h>
 #include <core/context.h>
 #include <core/native_api.h>
+#include <core/sanitizer.h>
 #include <elf/elf_image.h>
 #include <elf/symbol_cache.h>
 #include <jni/jni_bridge.h>
@@ -12,7 +14,7 @@
 
 #include "ipc_bridge.h"
 
-namespace vector::native::module {
+namespace sys::rt::module {
 
 // --- Process UID Constants ---
 // Values used to identify special Android processes to avoid injection.
@@ -43,37 +45,37 @@ enum RuntimeFlags : uint32_t {
     LATE_INJECT = 1 << 30,
 };
 
-// A simply ConfigBridge implemnetation holding obfuscation maps in memory
-using obfuscation_map_t = std::map<std::string, std::string>;
-class ConfigImpl : public ConfigBridge {
+// A simply SettingsSource implemnetation holding obfuscation maps in memory
+using obfuscation_map_t = NameTable;
+class SettingsImpl : public SettingsSource {
 public:
-    inline static void Init() { instance_ = std::make_unique<ConfigImpl>(); }
+    inline static void Init() { instance_ = std::make_unique<SettingsImpl>(); }
 
     virtual obfuscation_map_t &obfuscation_map() override { return obfuscation_map_; }
 
     virtual void obfuscation_map(obfuscation_map_t m) override { obfuscation_map_ = std::move(m); }
 
 private:
-    ConfigImpl() = default;
+    SettingsImpl() = default;
 
-    friend std::unique_ptr<ConfigImpl> std::make_unique<ConfigImpl>();
+    friend std::unique_ptr<SettingsImpl> std::make_unique<SettingsImpl>();
     obfuscation_map_t obfuscation_map_;
 };
 
 /**
- * @class VectorModule
+ * @class LoaderModule
  * @brief The core implementation of the Zygisk module for the Vector framework.
  *
  * This class is the main entry point for Zygisk. It inherits from:
  * - zygisk::ModuleBase:      To receive lifecycle callbacks from the Zygisk loader.
- * - vector::native::Context: To gain the core injection capabilities (DEX loading, ART hooking)
+ * - sys::rt::Context: To gain the core injection capabilities (DEX loading, ART hooking)
  *                            from the 'native' library.
  *
  * It orchestrates the injection process by deciding which processes to target,
  * using the IPCBridge to fetch the framework from the manager service, and then
  * using the Context base to perform the actual injection.
  */
-class VectorModule : public zygisk::ModuleBase, public vector::native::Context {
+class LoaderModule : public zygisk::ModuleBase, public sys::rt::Context {
 public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override;
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override;
@@ -126,8 +128,8 @@ private:
             [](auto symbol) { return ElfSymbolCache::GetArt()->getSymbAddress(symbol); },
         .art_symbol_prefix_resolver =
             [](auto symbol) { return ElfSymbolCache::GetArt()->getSymbPrefixFirstAddress(symbol); },
-        .generated_class_name = "Vector_",
-        .generated_source_name = "Dobby",
+        .generated_class_name = "O_",
+        .generated_source_name = "JNI",
     };
 
     // State managed within the class instance for each forked process.
@@ -136,10 +138,10 @@ private:
 };
 
 // =========================================================================================
-// Implementation of VectorModule
+// Implementation of LoaderModule
 // =========================================================================================
 
-void VectorModule::LoadDex(JNIEnv *env, PreloadedDex &&dex) {
+void LoaderModule::LoadDex(JNIEnv *env, PreloadedDex &&dex) {
     LOGV("Loading framework DEX into memory (size: {}).", dex.size());
 
     // Get the system ClassLoader. This will be the parent of our new loader.
@@ -197,16 +199,16 @@ void VectorModule::LoadDex(JNIEnv *env, PreloadedDex &&dex) {
     LOGV("Framework ClassLoader created successfully.");
 }
 
-void VectorModule::SetupEntryClass(JNIEnv *env) {
+void LoaderModule::SetupEntryClass(JNIEnv *env) {
     if (!inject_class_loader_) {
         LOGE("Cannot setup entry class: ClassLoader is null.");
         return;
     }
 
     // Use the obfuscation map from the config to get the real class name.
-    const auto &obfs_map = ConfigBridge::GetInstance()->obfuscation_map();
+    const auto &obfs_map = SettingsSource::GetInstance()->obfuscation_map();
     std::string entry_class_name;
-    entry_class_name = obfs_map.at("org.matrix.vector.core.") + "Main";
+    entry_class_name = obfs_map.At(SEALED(kEntryClassKey)) + "Main";
 
     // We must find the class through our custom ClassLoader.
     auto entry_class = this->FindClassFromLoader(env, inject_class_loader_, entry_class_name);
@@ -220,17 +222,17 @@ void VectorModule::SetupEntryClass(JNIEnv *env) {
     LOGV("Framework entry class '{}' located.", entry_class_name.c_str());
 }
 
-void VectorModule::onLoad(zygisk::Api *api, JNIEnv *env) {
+void LoaderModule::onLoad(zygisk::Api *api, JNIEnv *env) {
     this->api_ = api;
     this->env_ = env;
 
-    // Create two singlton instances for classes Context and ConfigBridge
+    // Create two singlton instances for classes Context and SettingsSource
     instance_.reset(this);
-    ConfigImpl::Init();
-    LOGD("Vector Zygisk module loaded");
+    SettingsImpl::Init();
+    LOGD("framework module loaded");
 }
 
-void VectorModule::preAppSpecialize(zygisk::AppSpecializeArgs *args) {
+void LoaderModule::preAppSpecialize(zygisk::AppSpecializeArgs *args) {
     // Reset state for this new process fork.
     should_inject_ = false;
     is_manager_app_ = false;
@@ -312,7 +314,7 @@ void VectorModule::preAppSpecialize(zygisk::AppSpecializeArgs *args) {
     LOGV("Process '{}' (UID: {}) is marked for injection.", nice_name_str.get(), args->uid);
 }
 
-void VectorModule::postAppSpecialize(const zygisk::AppSpecializeArgs *args) {
+void LoaderModule::postAppSpecialize(const zygisk::AppSpecializeArgs *args) {
     if (!should_inject_) {
         SetAllowUnload(true);  // Not a target, allow module to be unloaded.
         return;
@@ -345,7 +347,7 @@ void VectorModule::postAppSpecialize(const zygisk::AppSpecializeArgs *args) {
     }
 
     auto obfs_map = ipc_bridge.FetchObfuscationMap(env_, binder.get());
-    ConfigBridge::GetInstance()->obfuscation_map(std::move(obfs_map));
+    SettingsSource::GetInstance()->obfuscation_map(std::move(obfs_map));
 
     {
         PreloadedDex dex(dex_fd, dex_size);
@@ -360,6 +362,14 @@ void VectorModule::postAppSpecialize(const zygisk::AppSpecializeArgs *args) {
     // Find the Java entrypoint.
     this->SetupEntryClass(env_);
 
+    // --- Trace redaction ---
+    // Installed only here: every early return above hands the library back to Zygisk, which
+    // may then unload it, and the filter's handlers live in this image -- an unloaded handler
+    // is a jump into unmapped memory the first time the app calls open().  Past this point
+    // postAppSpecialize ends unconditionally with SetAllowUnload(false), so the image stays
+    // mapped for the life of the process.
+    sanitizer::Install();
+
     // Hand off control to the Java side of the framework.
     bool entered = this->FindAndCall(
         env_, "forkCommon", "(ZZLjava/lang/String;Ljava/lang/String;Landroid/os/IBinder;)V",
@@ -368,7 +378,7 @@ void VectorModule::postAppSpecialize(const zygisk::AppSpecializeArgs *args) {
     if (entered) {
         LOGV("Injected Vector framework into '{}'.", nice_name_str.get());
     } else {
-        LOGE("Framework entry failed in '{}'; this process runs without Xposed.",
+        LOGE("Framework entry failed in '{}'; this process runs without the runtime.",
              nice_name_str.get());
     }
     // Unconditionally: the ART and JNI hooks were installed before the entry ran, and their
@@ -376,7 +386,7 @@ void VectorModule::postAppSpecialize(const zygisk::AppSpecializeArgs *args) {
     SetAllowUnload(false);
 }
 
-void VectorModule::preServerSpecialize(zygisk::ServerSpecializeArgs *args) {
+void LoaderModule::preServerSpecialize(zygisk::ServerSpecializeArgs *args) {
     // The system server is always a target for injection.
     should_inject_ = true;
     LOGI("System server process detected. Marking for injection.");
@@ -385,7 +395,7 @@ void VectorModule::preServerSpecialize(zygisk::ServerSpecializeArgs *args) {
     IPCBridge::GetInstance().Initialize(env_);
 }
 
-void VectorModule::postServerSpecialize(const zygisk::ServerSpecializeArgs *args) {
+void LoaderModule::postServerSpecialize(const zygisk::ServerSpecializeArgs *args) {
     if (!should_inject_) {
         SetAllowUnload(true);
         return;
@@ -422,7 +432,7 @@ void VectorModule::postServerSpecialize(const zygisk::ServerSpecializeArgs *args
                           ipc_bridge.IsSystemServerRunning(env_);
     // The real `serial` service is registered by then, and a lookup returning it would be
     // indistinguishable from a successful rendezvous.
-    std::string bridgeServiceName = is_late_inject ? "serial_vector" : "serial";
+    std::string bridgeServiceName = is_late_inject ? "cmdex_alt" : "cmdex";
     auto system_binder = ipc_bridge.RequestSystemServerBinder(env_, bridgeServiceName);
     if (!system_binder) {
         LOGE("Failed to get system server IPC binder. Aborting injection.");
@@ -445,7 +455,7 @@ void VectorModule::postServerSpecialize(const zygisk::ServerSpecializeArgs *args
     }
 
     auto obfs_map = ipc_bridge.FetchObfuscationMap(env_, effective_binder);
-    ConfigBridge::GetInstance()->obfuscation_map(std::move(obfs_map));
+    SettingsSource::GetInstance()->obfuscation_map(std::move(obfs_map));
 
     {
         PreloadedDex dex(dex_fd, dex_size);
@@ -460,6 +470,10 @@ void VectorModule::postServerSpecialize(const zygisk::ServerSpecializeArgs *args
     this->SetupEntryClass(env_);
 
     auto system_name = lsplant::ScopedLocalRef(env_, env_->NewStringUTF("system"));
+    // Same reasoning as postAppSpecialize: installed past every early return, because only
+    // then is it guaranteed that this image stays mapped.  system_server runs app-visible
+    // code paths too, and a process that can read its own maps can read us.
+    sanitizer::Install();
     bool entered = this->FindAndCall(
         env_, "forkCommon", "(ZZLjava/lang/String;Ljava/lang/String;Landroid/os/IBinder;)V",
         JNI_TRUE, is_late_inject, system_name.get(), nullptr, manager_binder.get(),
@@ -468,13 +482,13 @@ void VectorModule::postServerSpecialize(const zygisk::ServerSpecializeArgs *args
     if (entered) {
         LOGI("Injected Vector framework into system_server.");
     } else {
-        LOGE("Framework entry failed in system_server; it runs without Xposed.");
+        LOGE("Framework entry failed in system_server; it runs without the runtime.");
     }
     // See postAppSpecialize: the hooks outlive a failed entry, so the library must stay.
     SetAllowUnload(false);
 }
 
-void VectorModule::SetAllowUnload(bool unload) {
+void LoaderModule::SetAllowUnload(bool unload) {
     if (api_ && unload) {
         LOGD("Allowing Zygisk to unload module library.");
         api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
@@ -490,9 +504,9 @@ void VectorModule::SetAllowUnload(bool unload) {
     }
 }
 
-}  // namespace vector::native::module
+}  // namespace sys::rt::module
 
 // =========================================================================================
 // Zygisk Module Registration
 // =========================================================================================
-REGISTER_ZYGISK_MODULE(vector::native::module::VectorModule);
+REGISTER_ZYGISK_MODULE(sys::rt::module::LoaderModule);
