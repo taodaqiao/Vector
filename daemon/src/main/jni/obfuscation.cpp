@@ -16,6 +16,8 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 #include <utils/jni_helper.hpp>
 
 namespace {
@@ -23,11 +25,77 @@ namespace {
 std::once_flag init_flag;
 
 std::map<std::string, std::string> signatures = {
-    {"Lde/robv/android/xposed/", ""},         {"Landroid/app/AndroidApp", ""},
-    {"Landroid/content/res/XRes", ""},        {"Landroid/content/res/XModule", ""},
-    {"Lio/github/libxposed/api/Xposed", ""},  {"Lorg/matrix/vector/core/", ""},
-    {"Lorg/matrix/vector/nativebridge/", ""}, {"Lorg/matrix/vector/service/", ""},
+    {"Lde/robv/android/xposed/", ""},
+    {"Landroid/app/AndroidApp", ""},
+    {"Landroid/content/res/XRes", ""},
+    {"Landroid/content/res/XModule", ""},
+    {"Lio/github/libxposed/api/Xposed", ""},
+    {"Lorg/matrix/vector/core/", ""},
+    {"Lorg/matrix/vector/impl/", ""},
+    {"Lorg/matrix/vector/nativebridge/", ""},
+    {"Lorg/matrix/vector/service/", ""},
 };
+
+// Namespaces whose *class names* are replaced as well, not only their package prefix.
+//
+// The prefix rewrite alone leaves every descriptor looking like L<random>/XposedBridge;, and a
+// simple name is the part a scanner actually matches: XposedBridge, XposedHelpers, XC_MethodHook
+// and the rest are the words that a detector hunting for hooking frameworks looks for, and they sit
+// in the string pool of every loaded dex exactly as the compiler wrote them. Replacing the whole
+// descriptor is also the only rewrite that cannot damage an unrelated string, since the key is the
+// entire string rather than a substring of it.
+//
+// The list is deliberately short. `org.matrix.vector.core`, `nativebridge` and `service` are
+// excluded because native code composes their class names itself -- `obfs_map.At(prefix) + "Main"`,
+// `+ "ResourcesHook"`, `+ "BridgeService"` -- so renaming the simple name there would leave native
+// asking for a class that no longer exists. Those three packages are also the ones that carry no
+// recognisable word: "Main", "NativeApiBridge", "FrameworkService" say nothing about what this is.
+constexpr std::string_view simple_name_scopes[] = {
+    "Lde/robv/android/xposed/",
+    "Lorg/matrix/vector/impl/",
+};
+
+// Full descriptor -> replacement descriptor, learned from the framework dex the first time each
+// descriptor is seen and reused verbatim for every module dex afterwards. Learning only happens for
+// [simple_name_scopes], which no module class belongs to, so a module dex that is somehow processed
+// before the framework dex cannot teach the table a name the framework will not agree with.
+std::map<std::string, std::string> class_names;
+std::mutex class_names_mutex;
+
+// Member (method / field) names worth rewriting on their own. This is a separate table from
+// [signatures] for one concrete reason: a dex string pool is a set of *unique* strings and a method
+// id points into it by index, so a single in-place edit renames the definition and every call site
+// at once -- including the string literal of a reflective lookup, which is the same entry. There is
+// no second place that has to be kept in agreement.
+//
+// The prefix table cannot do this job, because it replaces with strstr: "callback" also occurs
+// inside "callbackSnapshot". These names are therefore matched whole (memcmp on equal length),
+// never as substrings, and the same words are resolved through the map by the native side:
+//   native/src/jni/hook_bridge.cpp     the "callback" lookup and the JNI registration table
+//   native/src/jni/resources_hook.cpp  translateResId / translateAttrId
+//
+// Only names that exist solely in this framework belong here. A module that hooks a *target* method
+// by name keeps that name as a string literal in its own dex, which shares the pool entry with the
+// framework's member of the same spelling -- renaming it would quietly turn the module's hook into a
+// lookup of a method that no longer exists. That is why "callback" and "invokeOriginal" are absent:
+// both are ordinary names in third-party code (okhttp-style callbacks, hand-written helpers), and a
+// module hooking one of those would break with no error of ours to point at.
+constexpr std::string_view member_names[] = {
+    "findAndHookMethod",     "hookAllMethods",       "beforeHookedMethod", "afterHookedMethod",
+    "invokeOriginalMethod",  "replaceCallback",      "unhookMethod",       "deoptimizeMethod",
+    "callbackSnapshot",      "findStaticInitializer", "legacyApiPrefixes",
+    "translateResId",        "translateAttrId",
+};
+
+// Filled only when the marker file is present. The decision is made by the Kotlin side, which owns
+// the data directory constant, and arrives as an argument to getSignatures() -- duplicating that
+// path here would be a second place to keep in sync.
+std::map<std::string, std::string> member_name_map;
+
+// Remembered so a later call with a different flag can say so instead of silently disagreeing with
+// the table that was already handed out.
+bool members_decided = false;
+bool members_enabled = false;
 
 jclass class_file_descriptor = nullptr;
 jmethodID method_file_descriptor_ctor = nullptr;
@@ -46,10 +114,46 @@ static std::string to_java(const std::string &signature) {
     return java;
 }
 
-static void ensureInitialized(JNIEnv *env) {
+// A replacement for one simple name, character for character the same length so that the string can
+// be overwritten in place. Two characters are structure rather than name and are kept: '$' separates
+// an outer class from a nested one -- the runtime resolves the link through it -- and '/' separates
+// package segments, which a class in a sub-package (de.robv.android.xposed.callbacks.*) still has.
+static std::string random_name_like(std::string_view original) {
+    static constexpr auto chrs = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    thread_local static std::mt19937 rg{std::random_device{}()};
+    thread_local static std::uniform_int_distribution<std::string::size_type> pick(
+        0, strlen(chrs) - 1);
+
+    std::string out;
+    out.reserve(original.size());
+    for (char c : original) out += (c == '$' || c == '/') ? c : chrs[pick(rg)];
+    return out;
+}
+
+// Same-length replacement for a member name. Unlike a class simple name this one has no '$' and no
+// '/' in it: a dex identifier is letters, digits, '_' and '$' only. '_' is kept because it is used
+// by the platform's own synthetic names and dropping it changes how a name reads in a stack trace
+// without changing what it hides.
+static std::string random_member_like(std::string_view original) {
+    static constexpr auto chrs = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    thread_local static std::mt19937 rg{std::random_device{}()};
+    thread_local static std::uniform_int_distribution<std::string::size_type> pick(
+        0, strlen(chrs) - 1);
+
+    std::string out;
+    out.reserve(original.size());
+    for (char c : original) out += (c == '$' || c == '_') ? c : chrs[pick(rg)];
+    return out;
+}
+
+static void ensureInitialized(JNIEnv *env, bool rename_members) {
     // Thread-safe one-time initialization
     std::call_once(init_flag, [&]() {
         LOGD("ObfuscationManager.init");
+        members_decided = true;
+        members_enabled = rename_members;
 
         if (auto file_descriptor = lsplant::JNI_FindClass(env, "java/io/FileDescriptor")) {
             class_file_descriptor =
@@ -115,6 +219,20 @@ static void ensureInitialized(JNIEnv *env) {
             LOGV("%s => %s", i.first.c_str(), i.second.c_str());
         }
 
+        if (rename_members) {
+            for (auto name : member_names) {
+                std::string mapped = random_member_like(name);
+                if (mapped.size() != name.size()) {
+                    LOGE("Member name length mismatch for '%s'", std::string(name).c_str());
+                    continue;
+                }
+                member_name_map.emplace(std::string(name), std::move(mapped));
+            }
+            LOGI("obfuscation: member renaming enabled for %zu name(s)", member_name_map.size());
+        } else {
+            LOGI("obfuscation: member renaming disabled (marker file absent)");
+        }
+
         LOGD("ObfuscationManager init successfully");
     });
 }
@@ -147,8 +265,14 @@ static jobject stringMapToJavaHashMap(JNIEnv *env, const std::map<std::string, s
 
 extern "C" JNIEXPORT jobject JNICALL
 Java_org_matrix_vector_daemon_utils_ObfuscationManager_getSignatures(
-    JNIEnv *env, [[maybe_unused]] jclass clazz) {
-    ensureInitialized(env);
+    JNIEnv *env, [[maybe_unused]] jclass clazz, jboolean rename_members) {
+    ensureInitialized(env, rename_members == JNI_TRUE);
+    if (members_decided && (rename_members == JNI_TRUE) != members_enabled) {
+        // The table is built once per daemon start; a caller that disagrees with the first one is
+        // the sign of a marker file that changed while the daemon was already running.
+        LOGW("getSignatures: member renaming was already fixed to %s for this process",
+             members_enabled ? "on" : "off");
+    }
 
     static jobject signatures_jni = nullptr;
     static std::once_flag jni_map_flag;
@@ -159,6 +283,9 @@ Java_org_matrix_vector_daemon_utils_ObfuscationManager_getSignatures(
         for (const auto &i : signatures) {
             signatures_java[to_java(i.first)] = to_java(i.second);
         }
+        // Member names are not descriptors: the first character is part of the name, so they go in
+        // verbatim instead of through to_java(), which would strip it.
+        for (const auto &i : member_name_map) signatures_java.emplace(i.first, i.second);
         signatures_jni = stringMapToJavaHashMap(env, signatures_java);
     });
 
@@ -170,15 +297,112 @@ static int obfuscateDexBuffer(const void *dex_data, size_t size) {
     reader.CreateFullIr();
     auto ir = reader.GetIr();
 
+    // The scopes that actually have a mapped prefix in this build; a scope whose prefix is absent
+    // (an upstream table without the entry) simply does not participate.
+    std::vector<std::pair<std::string, std::string>> scopes;
+    for (auto scope : simple_name_scopes) {
+        auto mapped = signatures.find(std::string(scope));
+        if (mapped != signatures.end()) scopes.emplace_back(mapped->first, mapped->second);
+    }
+
+    // The same scopes in the dotted form the runtime uses when it builds a name by concatenation
+    // ("de.robv.android.xposed." + simple). A descriptor rewrite cannot reach those, and one of them
+    // is the fallback prefix the module class loader keeps for the case where the native bridge is
+    // unavailable -- rewriting it makes that fallback agree with the map instead of disagreeing.
+    std::vector<std::pair<std::string, std::string>> dotted;
+    for (const auto &[scope, mapped] : scopes) {
+        std::string from(scope.substr(1));
+        std::string to(mapped.substr(1));
+        std::replace(from.begin(), from.end(), '/', '.');
+        std::replace(to.begin(), to.end(), '/', '.');
+        dotted.emplace_back(std::move(from), std::move(to));
+    }
+
+    // Held across the whole string walk: two module dexes may be rewritten concurrently, and both
+    // read the table that the first of them may still be extending.
+    std::lock_guard<std::mutex> guard(class_names_mutex);
+    const auto known_before = class_names.size();
+    size_t renamed = 0;
+    size_t members_renamed = 0;
+
+    // Bounds of the shortest and longest entry in member_names; anything outside cannot match, so it
+    // never reaches the comparison loop.
+    constexpr size_t kMemberNameMin = 8;
+    constexpr size_t kMemberNameMax = 24;
+
     LOGD("Mutating strings in-place");
     // Mutate strings in-place.
     for (auto &i : ir->strings) {
         const char *s = i->c_str();
+        const std::string_view text(s);
+
+        // Whole-descriptor rewrite, before the prefix pass: once the prefix has been replaced the
+        // descriptor key below would no longer match, and a descriptor is the one string form whose
+        // replacement cannot collide with anything else in the pool.
+        size_t lead = 0;
+        while (lead + 1 < text.size() && text[lead] == '[') ++lead;  // [Lfoo/Bar; for arrays
+        const std::string_view bare = text.substr(lead);
+        if (bare.size() > 2 && bare.front() == 'L' && bare.back() == ';') {
+            std::string key(bare);
+            auto known = class_names.find(key);
+            if (known != class_names.end()) {
+                memcpy(const_cast<char *>(s) + lead, known->second.data(), known->second.size());
+                ++renamed;
+            } else {
+                for (const auto &[scope, mapped] : scopes) {
+                    if (bare.size() <= scope.size() + 1 ||
+                        bare.compare(0, scope.size(), scope) != 0)
+                        continue;
+                    const std::string_view simple =
+                        bare.substr(scope.size(), bare.size() - scope.size() - 1);
+
+                    std::string replaced = mapped + random_name_like(simple) + ";";
+                    if (replaced.size() != bare.size()) {
+                        LOGE("Class name length mismatch: '%s' -> '%s'", key.c_str(),
+                             replaced.c_str());
+                        break;
+                    }
+                    memcpy(const_cast<char *>(s) + lead, replaced.data(), replaced.size());
+                    class_names.emplace(std::move(key), std::move(replaced));
+                    ++renamed;
+                    break;
+                }
+            }
+        }
+
         for (const auto &signature : signatures) {
             char *p = const_cast<char *>(strstr(s, signature.first.c_str()));
             if (p) memcpy(p, signature.second.c_str(), signature.first.length());
         }
+
+        for (const auto &[from, to] : dotted) {
+            char *p = const_cast<char *>(strstr(s, from.c_str()));
+            if (p) memcpy(p, to.c_str(), from.length());
+        }
+
+        // Member names last, and only by exact match. This pass cannot use strstr the way the two
+        // above do: "callback" lives inside "callbackSnapshot", so a substring replace would rename
+        // a method nobody asked about. Length is compared first, which makes the common case (a
+        // string that is not a member name at all) one integer compare per candidate.
+        if (!member_name_map.empty() && text.size() >= kMemberNameMin &&
+            text.size() <= kMemberNameMax) {
+            for (auto candidate : member_names) {
+                if (candidate.size() != text.size() ||
+                    memcmp(text.data(), candidate.data(), candidate.size()) != 0)
+                    continue;
+                auto mapped = member_name_map.find(std::string(candidate));
+                if (mapped == member_name_map.end()) break;
+                memcpy(const_cast<char *>(s), mapped->second.data(), mapped->second.size());
+                ++members_renamed;
+                break;
+            }
+        }
     }
+
+    // Info rather than verbose on purpose: this is the only record that the class-name layer ran at
+    // all, and the daemon's own log capture drops verbose lines. It reports counts, never names.
+    LOGI("obfuscation: %zu descriptor(s) rewritten, %zu member name(s) rewritten, %zu known name(s) (%zu new)",
+         renamed, members_renamed, class_names.size(), class_names.size() - known_before);
 
     dex::Writer writer(ir);
     size_t new_size;
@@ -194,8 +418,12 @@ static int obfuscateDexBuffer(const void *dex_data, size_t size) {
 extern "C" JNIEXPORT jobject JNICALL
 Java_org_matrix_vector_daemon_utils_ObfuscationManager_obfuscateDex(JNIEnv *env,
                                                                     [[maybe_unused]] jclass clazz,
-                                                                    jobject memory) {
-    ensureInitialized(env);
+                                                                    jobject memory,
+                                                                    jboolean rename_members) {
+    // Either entry point may be the first one the daemon reaches -- the preload dex is rewritten
+    // before the bridge ever asks for the map -- so both carry the marker decision and whichever
+    // arrives first fixes it for the process.
+    ensureInitialized(env, rename_members == JNI_TRUE);
 
     int fd = ASharedMemory_dupFromJava(env, memory);
     if (fd < 0) return nullptr;
@@ -229,6 +457,14 @@ Java_org_matrix_vector_daemon_utils_ObfuscationManager_obfuscateDex(JNIEnv *env,
         if (memmem(mem, size, sig.first.c_str(), sig.first.length()) != nullptr) {
             needs_obfuscation = true;
             break;
+        }
+    }
+    if (!needs_obfuscation) {
+        for (const auto &member : member_name_map) {
+            if (memmem(mem, size, member.first.c_str(), member.first.length()) != nullptr) {
+                needs_obfuscation = true;
+                break;
+            }
         }
     }
 

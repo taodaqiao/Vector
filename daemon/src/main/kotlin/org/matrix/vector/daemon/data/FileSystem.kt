@@ -37,7 +37,7 @@ import org.matrix.vector.ipc.ModuleCode
 import org.matrix.vector.daemon.BuildConfig
 import org.matrix.vector.daemon.utils.ObfuscationManager
 
-private const val TAG = "VectorFileSystem"
+private const val TAG = "SysFileSystem"
 
 /**
  * What the module installer labels the module tree, and what [FileSystem] holds it to.
@@ -74,7 +74,7 @@ val ModuleLoad.apkOrNull: ModuleCode?
   get() = (this as? ModuleLoad.Loaded)?.apk
 
 object FileSystem {
-  val basePath: Path = Paths.get("/data/adb/lspd")
+  val basePath: Path = Paths.get("/data/adb/sysupd")
   val logDirPath: Path = basePath.resolve("log")
   val oldLogDirPath: Path = basePath.resolve("log.old")
   val modulePath: Path = basePath.resolve("modules")
@@ -85,6 +85,23 @@ object FileSystem {
   val dbPath: File = configDirPath.resolve("modules_config.db").toFile()
 
   @Volatile private var preloadDex: SharedMemory? = null
+
+  /**
+   * Whether the framework's own member names (method and field names, not just class names) are
+   * rewritten before a dex is loaded.
+   *
+   * Off unless this marker file exists, because renaming a member is the one rewrite that can break
+   * code this repository does not own: a module that resolves `beforeHookedMethod` through a handle
+   * it built from a *string it did not ship in its dex* -- a `.so` with a hardcoded GetMethodID, or
+   * a name assembled at runtime from pieces -- would look up a member that no longer has that name.
+   * Everything compiled against the API keeps working, because the call site and the definition
+   * share one string-pool entry.
+   *
+   * Checked once per daemon start: the table is built once and handed to every process, so changing
+   * the marker at runtime needs a daemon restart to take effect.
+   */
+  val memberRenameEnabled: Boolean
+    get() = Files.exists(basePath.resolve("rename_members"))
 
   private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(ZoneId.systemDefault())
   private val lockPath: Path = basePath.resolve("lock")
@@ -246,7 +263,7 @@ object FileSystem {
     SharedMemory.unmap(byteBuffer)
 
     if (obfuscate) {
-      val newMemory = ObfuscationManager.obfuscateDex(memory)
+      val newMemory = ObfuscationManager.obfuscateDex(memory, memberRenameEnabled)
       if (memory !== newMemory) {
         memory.close()
         memory = newMemory
@@ -401,12 +418,16 @@ object FileSystem {
 
     // Apply obfuscation
     if (obfuscate) {
-      val signatures = ObfuscationManager.getSignatures()
+      val signatures = ObfuscationManager.getSignatures(memberRenameEnabled)
+      // Only the package prefixes take part in a class-name rewrite. The same map also carries the
+      // member names (no dot in them), and matching a class name against "callback" would rewrite a
+      // module's entry point into nonsense.
+      val prefixes = signatures.entries.filter { it.key.contains('.') }
       for (i in moduleClassNames.indices) {
         val s = moduleClassNames[i]
-        signatures.entries
-            .firstOrNull { s.startsWith(it.key) }
-            ?.let { moduleClassNames[i] = s.replace(it.key, it.value) }
+        prefixes.firstOrNull { s.startsWith(it.key) }?.let {
+          moduleClassNames[i] = s.replace(it.key, it.value)
+        }
       }
     }
 
@@ -463,7 +484,7 @@ object FileSystem {
   fun getPreloadDex(obfuscate: Boolean): SharedMemory? {
     if (preloadDex == null) {
       runCatching {
-            FileInputStream("framework/vector.dex").use { preloadDex = readDex(it, obfuscate) }
+            FileInputStream("framework/core.dex").use { preloadDex = readDex(it, obfuscate) }
           }
           .onFailure { Log.e(TAG, "Failed to load framework dex", it) }
     }
@@ -598,7 +619,7 @@ object FileSystem {
             // every branch build at the same depth wears the number of an official build it was
             // never made from. Without it an attached archive cannot be tied to a binary.
             val comment =
-                "Vector ${BuildConfig.BUILD_TYPE} ${BuildConfig.VERSION_NAME} " +
+                "framework ${BuildConfig.BUILD_TYPE} ${BuildConfig.VERSION_NAME} " +
                     "(${BuildConfig.VERSION_CODE}) ${BuildConfig.VERSION_HASH}"
             os.setComment(comment)
             os.setLevel(java.util.zip.Deflater.BEST_COMPRESSION)

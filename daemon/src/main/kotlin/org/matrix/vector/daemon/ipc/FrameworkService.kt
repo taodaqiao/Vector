@@ -20,7 +20,7 @@ import org.matrix.vector.daemon.system.PER_USER_RANGE
 import org.matrix.vector.daemon.utils.InstallerVerifier
 import org.matrix.vector.daemon.utils.ObfuscationManager
 
-private const val TAG = "VectorFrameworkService"
+private const val TAG = "SysFrameworkService"
 
 // Hardcoded transaction code from BridgeService
 const val BRIDGE_TRANSACTION_CODE =
@@ -232,7 +232,7 @@ object FrameworkService : IFrameworkService.Stub() {
       }
       OBFUSCATION_MAP_TRANSACTION_CODE -> {
         val obfuscation = ConfigCache.state.isDexObfuscateEnabled
-        val signatures = ObfuscationManager.getSignatures()
+        val signatures = ObfuscationManager.getSignatures(FileSystem.memberRenameEnabled)
         reply?.writeNoException()
         reply?.writeInt(signatures.size * 2)
         for ((key, value) in signatures) {
