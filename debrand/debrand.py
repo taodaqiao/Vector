@@ -237,6 +237,26 @@ EDITS: list[tuple[str, str, str]] = [
     ),
 ]
 
+# Rules that later refactors made obsolete.  The literals they used to rewrite now live in
+# ``Identity`` (or were replaced by build-time randomness), so the literal is gone from the
+# sources and the rule can never match again.  The literals stay listed here so the history
+# is still greppable, but the rules are filtered out before use — otherwise ``--dry-run``
+# reports them as permanent MISMATCH lines and stops being a usable gate.
+RETIRED_OLD: frozenset[str] = frozenset(
+    {
+        'Paths.get("/data/adb/lspd")',
+        'FileInputStream("framework/vector.dex")',
+        'get() = if (startedAfterSystemServer) "serial_vector" else "serial"',
+        'name = "vector-cli"',
+        'is_late_inject ? "serial_vector" : "serial"',
+        'private const val STATUS_CHANNEL_ID = "vector_status"',
+        'private const val UPDATED_CHANNEL_ID = "vector_module_updated"',
+        'val SCOPE_CHANNEL_ID = "vector_module_scope"',
+        'private const val SECRET_CODE = "832867"',
+    }
+)
+EDITS = [edit for edit in EDITS if edit[1] not in RETIRED_OLD]
+
 # (file, pattern, replacement, marker).  ``replacement`` may use \1 backrefs;
 # it is applied through Match.expand, so a ``$`` in the replacement is literal.
 REGEX_EDITS: list[tuple[str, str, str, str]] = [
